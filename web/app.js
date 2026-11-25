@@ -43,6 +43,19 @@ const el = {
   qrWaiting: $('qr-waiting'),
   qrClose: $('qr-close'),
   qrNew: $('qr-new'),
+  soundInput: $('sound-input'),
+  soundName: $('sound-name'),
+  soundChoose: $('sound-choose'),
+  soundRemove: $('sound-remove'),
+  soundEditor: $('sound-editor'),
+  soundTimeline: $('sound-timeline'),
+  soundWave: $('sound-wave'),
+  soundDimLeft: $('sound-dim-left'),
+  soundDimRight: $('sound-dim-right'),
+  soundSelection: $('sound-selection'),
+  soundTicks: $('sound-ticks'),
+  soundStart: $('sound-start'),
+  soundAudio: $('sound-audio'),
 };
 
 const MIN_SECONDS = 0.5;
@@ -60,7 +73,10 @@ const state = {
   peaks: null,
   start: 0,
   length: DEFAULT_SECONDS,
-  sticker: null, // { start, duration, kb, audioSeconds }
+  track: null, // separate sound: { name, duration }
+  trackPeaks: null,
+  audioStart: 0,
+  sticker: null, // { start, duration, kb, audioSeconds, audioStart }
   stale: false, // trim or framing changed since the sticker was built
   loadId: 0,
   building: false,
@@ -69,6 +85,8 @@ const state = {
 };
 let rebuildTimer = null;
 let videoUrl = null;
+let trackUrl = null;
+let trackLoadId = 0;
 
 // ---------- Helpers ----------
 
@@ -206,9 +224,24 @@ document.addEventListener('dragleave', (event) => {
 document.addEventListener('drop', (event) => {
   event.preventDefault();
   el.drop.classList.remove('dragging');
-  const file = event.dataTransfer?.files?.[0];
-  if (file) loadVideo(file);
+  loadDropped([...(event.dataTransfer?.files || [])]);
 });
+
+const isAudioFile = (file) => file.type.startsWith('audio/') || /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)$/i.test(file.name);
+
+// A video and a sound can be dropped together; a sound alone replaces the
+// sound of the video already chosen.
+async function loadDropped(files) {
+  const sound = files.find(isAudioFile);
+  const videoFile = files.find((file) => !isAudioFile(file));
+  if (videoFile) await loadVideo(videoFile);
+  if (!sound) return;
+  if (!state.video) {
+    showBanner('Escolha o vídeo primeiro. Depois traga o áudio.');
+    return;
+  }
+  loadTrack(sound);
+}
 
 async function loadVideo(file) {
   if (!file) return;
@@ -294,6 +327,7 @@ function renderTrim() {
   el.start.max = Math.max(0, total - MIN_SECONDS).toFixed(1);
   el.duration.max = Math.min(state.video.maxSeconds, total).toFixed(1);
   el.frameGuide.hidden = fit() !== 'cover';
+  renderSound();
   if (el.video.paused) {
     el.playhead.style.left = `${left}%`;
     if (el.video.readyState >= 1) el.video.currentTime = state.start;
@@ -312,7 +346,10 @@ function renderTicks() {
 }
 
 function drawWave() {
-  const canvas = el.wave;
+  drawBars(el.wave, state.peaks);
+}
+
+function drawBars(canvas, peaks) {
   const ratio = window.devicePixelRatio || 1;
   const { width, height } = canvas.getBoundingClientRect();
   if (!width) return;
@@ -325,18 +362,21 @@ function drawWave() {
   const bars = Math.floor(width / 4);
   for (let i = 0; i < bars; i++) {
     let level = 0.12;
-    if (state.peaks) {
-      const from = Math.floor((i / bars) * state.peaks.length);
-      const to = Math.max(from + 1, Math.floor(((i + 1) / bars) * state.peaks.length));
+    if (peaks) {
+      const from = Math.floor((i / bars) * peaks.length);
+      const to = Math.max(from + 1, Math.floor(((i + 1) / bars) * peaks.length));
       level = 0;
-      for (let j = from; j < to; j++) level = Math.max(level, state.peaks[j]);
+      for (let j = from; j < to; j++) level = Math.max(level, peaks[j]);
       level = Math.max(0.06, level);
     }
     const barHeight = level * (height - 12);
     ctx.fillRect(i * 4 + 1, (height - barHeight) / 2, 2, barHeight);
   }
 }
-window.addEventListener('resize', () => state.video && drawWave());
+window.addEventListener('resize', () => {
+  if (state.video) drawWave();
+  if (state.track) drawBars(el.soundWave, state.trackPeaks);
+});
 
 // Pointer: drag the selection, either edge, or tap the bar to jump there.
 el.timeline.addEventListener('pointerdown', (event) => {
@@ -390,20 +430,29 @@ for (const radio of document.querySelectorAll('input[name="fit"]')) {
 
 function pausePreview() {
   el.video.pause();
+  el.soundAudio.pause();
   el.listen.setAttribute('aria-pressed', 'false');
+}
+
+// With a separate sound, the video plays muted and the sound plays along.
+function restartPreview() {
+  el.video.currentTime = state.start;
+  if (state.track) el.soundAudio.currentTime = state.audioStart;
 }
 
 el.listen.addEventListener('click', () => {
   if (!el.video.paused) return pausePreview();
-  el.video.currentTime = state.start;
+  el.video.muted = Boolean(state.track);
+  restartPreview();
   el.video.play();
+  if (state.track) el.soundAudio.play();
   el.listen.setAttribute('aria-pressed', 'true');
 });
 
 el.video.addEventListener('timeupdate', () => {
   if (!state.video) return;
   if (el.video.currentTime >= state.start + state.length || el.video.currentTime < state.start - 0.3) {
-    el.video.currentTime = state.start;
+    restartPreview();
   }
 });
 
@@ -414,6 +463,166 @@ function trackPlayhead() {
   requestAnimationFrame(trackPlayhead);
 }
 requestAnimationFrame(trackPlayhead);
+
+// ---------- Separate sound ----------
+
+el.soundChoose.addEventListener('click', () => el.soundInput.click());
+el.soundInput.addEventListener('change', () => loadTrack(el.soundInput.files[0]));
+
+async function loadTrack(file) {
+  if (!file) return;
+  el.soundInput.value = '';
+  if (state.sending) {
+    showBanner('Aguarde o envio terminar e escolha o áudio de novo.');
+    return;
+  }
+  // The server takes one job at a time: let the sticker being made finish.
+  el.soundName.textContent = 'Carregando o áudio…';
+  while (state.building) await new Promise((resolve) => setTimeout(resolve, 200));
+  showBanner('');
+  pausePreview();
+  el.soundChoose.disabled = true;
+  el.soundName.textContent = 'Carregando o áudio…';
+  let track;
+  try {
+    track = await api(`/api/audio?nome=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
+  } catch (error) {
+    // The previous sound, if any, stays in use.
+    showBanner(error.message);
+    renderSound();
+    return;
+  } finally {
+    el.soundChoose.disabled = false;
+  }
+
+  const loadId = ++trackLoadId;
+  state.track = { name: file.name, duration: track.duration };
+  state.trackPeaks = null;
+  state.audioStart = 0;
+  if (trackUrl) URL.revokeObjectURL(trackUrl);
+  trackUrl = URL.createObjectURL(file);
+  el.soundAudio.src = trackUrl;
+  renderSound();
+  renderSoundTicks();
+  drawBars(el.soundWave, null);
+  markStale();
+
+  if (track.duration <= MAX_WAVEFORM_SECONDS) {
+    const { peaks } = await readWaveform(file);
+    // Another sound may have been chosen while this one was decoding.
+    if (loadId !== trackLoadId || !state.track) return;
+    state.trackPeaks = peaks;
+    drawBars(el.soundWave, peaks);
+  }
+}
+
+function clearTrack() {
+  trackLoadId++;
+  state.track = null;
+  state.trackPeaks = null;
+  state.audioStart = 0;
+  el.soundAudio.removeAttribute('src');
+  if (trackUrl) URL.revokeObjectURL(trackUrl);
+  trackUrl = null;
+  el.video.muted = false;
+  renderSound();
+}
+
+el.soundRemove.addEventListener('click', async () => {
+  if (state.building || state.sending) {
+    showBanner('Aguarde a figurinha atual terminar.');
+    return;
+  }
+  pausePreview();
+  try {
+    await api('/api/audio/remover', { method: 'POST' });
+  } catch (error) {
+    showBanner(error.message);
+    return;
+  }
+  clearTrack();
+  markStale();
+});
+
+// The window over the sound is as long as the piece of video.
+function soundWindow() {
+  return Math.min(state.length, state.track.duration);
+}
+
+function clampAudioStart(value) {
+  const latest = Math.max(0, state.track.duration - soundWindow());
+  return round1(Math.min(Math.max(0, value), latest));
+}
+
+function setAudioStart(value) {
+  const next = clampAudioStart(value);
+  if (next === state.audioStart) return;
+  state.audioStart = next;
+  renderSound();
+  if (!el.video.paused) restartPreview();
+  markStale();
+}
+
+function renderSound() {
+  const { track } = state;
+  el.soundEditor.hidden = !track;
+  el.soundRemove.hidden = !track;
+  el.soundChoose.textContent = track ? 'Trocar áudio' : 'Usar outro áudio';
+  if (!track) {
+    el.soundName.textContent = state.video && !state.video.hasAudio ? 'O vídeo não tem som' : 'O do próprio vídeo';
+    return;
+  }
+  el.soundName.textContent = track.name;
+  // A longer piece of video can push the window past the end of the sound.
+  state.audioStart = clampAudioStart(state.audioStart);
+  const left = (state.audioStart / track.duration) * 100;
+  const width = (soundWindow() / track.duration) * 100;
+  el.soundSelection.style.left = `${left}%`;
+  el.soundSelection.style.width = `${width}%`;
+  el.soundDimLeft.style.width = `${left}%`;
+  el.soundDimRight.style.width = `${Math.max(0, 100 - left - width)}%`;
+  el.soundStart.max = Math.max(0, track.duration - soundWindow()).toFixed(1);
+  if (document.activeElement !== el.soundStart) el.soundStart.value = state.audioStart.toFixed(1);
+}
+
+function renderSoundTicks() {
+  const total = state.track.duration;
+  const steps = 6;
+  el.soundTicks.replaceChildren(...Array.from({ length: steps + 1 }, (_, i) => {
+    const span = document.createElement('span');
+    const value = (total * i) / steps;
+    span.textContent = total >= 20 ? `${Math.round(value)} s` : seconds(value);
+    return span;
+  }));
+}
+
+// Drag the window over the sound, or tap the bar to jump there.
+el.soundTimeline.addEventListener('pointerdown', (event) => {
+  if (!state.track) return;
+  event.preventDefault();
+  const rect = el.soundTimeline.getBoundingClientRect();
+  const toTime = (x) => ((x - rect.left) / rect.width) * state.track.duration;
+  const onSelection = event.target === el.soundSelection;
+  const grabOffset = toTime(event.clientX) - state.audioStart;
+  if (!onSelection) setAudioStart(toTime(event.clientX) - soundWindow() / 2);
+
+  el.soundTimeline.setPointerCapture(event.pointerId);
+  const move = (moveEvent) => {
+    const time = toTime(moveEvent.clientX);
+    setAudioStart(onSelection ? time - grabOffset : time - soundWindow() / 2);
+  };
+  const up = () => {
+    el.soundTimeline.removeEventListener('pointermove', move);
+    el.soundTimeline.removeEventListener('pointerup', up);
+    el.soundTimeline.removeEventListener('pointercancel', up);
+  };
+  el.soundTimeline.addEventListener('pointermove', move);
+  el.soundTimeline.addEventListener('pointerup', up);
+  el.soundTimeline.addEventListener('pointercancel', up);
+});
+
+el.soundStart.addEventListener('change', () => setAudioStart(Number(el.soundStart.value)));
+el.soundStart.addEventListener('blur', renderSound);
 
 // ---------- Building the sticker ----------
 
@@ -441,7 +650,7 @@ async function build() {
   try {
     state.sticker = await api('/api/figurinha', {
       method: 'POST',
-      json: { start: state.start, duration: state.length, fit: fit() },
+      json: { start: state.start, duration: state.length, fit: fit(), audioStart: state.audioStart },
     });
     state.stale = false;
     const version = Date.now();
@@ -449,7 +658,7 @@ async function build() {
     el.stickerAudio.src = state.sticker.audioSeconds ? `/api/arquivo/som.ogg?v=${version}` : '';
     setStatus(el.stickerStatus, state.sticker.audioSeconds
       ? 'Toque na figurinha para ouvir.'
-      : 'Esse vídeo não tem som. Dá para baixar a figurinha, mas ela sai muda.');
+      : 'Esse vídeo não tem som. Use outro áudio no passo 1 ou baixe a figurinha muda.');
   } catch (error) {
     if (error.status === 409) {
       // The server is still busy (sending, for example): try again shortly.

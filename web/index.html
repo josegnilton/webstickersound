@@ -80,6 +80,33 @@
           </button>
         </div>
         <p class="hint">Até 10 segundos. Arraste a seleção ou as bordas dela na barra.</p>
+
+        <div class="sound">
+          <input class="visually-hidden" type="file" id="sound-input" accept="audio/*,video/*,.mp3,.m4a,.aac,.ogg,.opus,.wav,.flac,.mkv,.mov,.webm">
+          <div class="sound-row">
+            <span class="field-label">Som</span>
+            <span class="sound-name" id="sound-name">O do próprio vídeo</span>
+            <button class="link" type="button" id="sound-choose">Usar outro áudio</button>
+            <button class="link" type="button" id="sound-remove" hidden>Voltar ao som do vídeo</button>
+          </div>
+          <div class="sound-editor" id="sound-editor" hidden>
+            <div class="timeline sound-timeline" id="sound-timeline" aria-hidden="true">
+              <canvas id="sound-wave"></canvas>
+              <div class="dim" id="sound-dim-left"></div>
+              <div class="dim" id="sound-dim-right"></div>
+              <div class="selection" id="sound-selection"></div>
+            </div>
+            <div class="ticks" id="sound-ticks" aria-hidden="true"></div>
+            <div class="controls">
+              <div class="field">
+                <label for="sound-start">Início do áudio (s)</label>
+                <input id="sound-start" type="number" inputmode="decimal" min="0" step="0.1" value="0">
+              </div>
+            </div>
+            <p class="hint">O áudio toca no lugar do som do vídeo, com a mesma duração do trecho. Arraste a seleção para escolher a parte.</p>
+          </div>
+          <audio id="sound-audio" preload="auto"></audio>
+        </div>
       </div>
     </section>
 

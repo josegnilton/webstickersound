@@ -109,8 +109,9 @@ Pronto: o topo da página mostra **WhatsApp conectado**. A conexão fica salva n
 1. **Escolha o vídeo**: clique em **Escolher vídeo** ou arraste o arquivo para a página.
 2. **Escolha o trecho**: arraste a seleção na barra (até 10 segundos) ou digite o início e a duração. **Ouvir trecho** toca o pedaço escolhido.
 3. **Enquadramento**: **Preencher** corta o vídeo num quadrado; **Mostrar tudo** mostra o vídeo inteiro com bordas transparentes.
-4. **Confira**: a figurinha aparece à direita. Toque nela para ouvir o som.
-5. **Envie**: clique em **Enviar para o meu WhatsApp**.
+4. **Som (opcional)**: para usar um áudio separado no lugar do som do vídeo, clique em **Usar outro áudio** (MP3, M4A, AAC, OGG, Opus, WAV, FLAC, ou outro vídeo). Arraste a seleção na barra do áudio para escolher a parte que toca. Também dá para arrastar o vídeo e o áudio juntos para a página. **Voltar ao som do vídeo** desfaz.
+5. **Confira**: a figurinha aparece à direita. Toque nela para ouvir o som.
+6. **Envie**: clique em **Enviar para o meu WhatsApp**.
 
 A figurinha chega na sua conversa com você mesmo (a conversa com o seu próprio número). Toque nela, salve nos favoritos e encaminhe para quem quiser.
 
@@ -127,7 +128,7 @@ Também dá para baixar a figurinha (`.webp`) e o som (`.ogg`) separados pelos l
 | **`npm ci` falha dizendo que precisa do Node.js 20** | Seu Node.js é antigo. Instale a versão LTS em [nodejs.org](https://nodejs.org). |
 | **O celular diz "sem conexão" ao ler o QR Code** | Confira a internet do computador e do celular, clique em **Gerar novo QR Code** e leia o código novo. |
 | **"A porta 4827 já está em uso"** | O Figuráudio já está aberto em outra janela. Use `http://127.0.0.1:4827` ou feche a outra janela. Para usar outra porta: `PORT=5000 npm start` (no PowerShell: `$env:PORT=5000; npm start`). |
-| **"Esse vídeo não tem som"** | O vídeo não tem faixa de áudio. A figurinha é criada, mas sai muda e não pode ser enviada com som. |
+| **"Esse vídeo não tem som"** | O vídeo não tem faixa de áudio. Use **Usar outro áudio** para colocar um som, ou baixe a figurinha muda. |
 | **"A figurinha passou de 500 KB"** | O WhatsApp limita figurinhas animadas a 500 KB. Escolha um trecho mais curto. |
 | **A figurinha chegou, mas quem recebeu não ouve o som** | A figurinha com som é um recurso novo do WhatsApp, liberado aos poucos. Quem recebe precisa ter o WhatsApp atualizado. |
 | **Quero trocar de conta ou desconectar** | Clique em **Desconectar o WhatsApp** na página. Você também pode remover o aparelho no celular, em **Aparelhos conectados**. |
@@ -139,7 +140,7 @@ Também dá para baixar a figurinha (`.webp`) e o som (`.ogg`) separados pelos l
 Tudo fica na pasta `data/`, dentro do projeto:
 
 - `data/session/`: a conexão com o seu WhatsApp. **Quem tiver essa pasta consegue usar a sua conta.** Não compartilhe e não envie para o GitHub (ela já está no `.gitignore`). O botão **Desconectar** apaga essa pasta.
-- `data/work/`: o último vídeo e a última figurinha. É apagada a cada vídeo novo e sempre que o Figuráudio abre.
+- `data/work/`: o último vídeo, o áudio separado (se tiver) e a última figurinha. É apagada sempre que o Figuráudio abre.
 - `data/whatsapp.log`: registro de avisos e erros da conexão, útil se algo der errado. Os números e nomes dos contatos são retirados, mas mesmo assim **não publique esse arquivo**.
 
 ---
@@ -147,7 +148,7 @@ Tudo fica na pasta `data/`, dentro do projeto:
 ## Como funciona
 
 1. A página envia o vídeo para o servidor local (que roda só no seu computador, em `127.0.0.1`).
-2. O FFmpeg corta o trecho, enquadra em 512x512 e gera:
+2. O FFmpeg corta o trecho (e, se você escolheu um áudio separado, o pedaço do áudio no lugar do som do vídeo), enquadra em 512x512 e gera:
    - a figurinha animada em **WebP**, com até 500 KB;
    - o som em **Opus** (`.ogg`), o mesmo formato dos áudios do WhatsApp.
 3. Ao enviar, a Baileys conecta como um "aparelho conectado" e manda uma mensagem de figurinha com o áudio embutido para a sua própria conversa.

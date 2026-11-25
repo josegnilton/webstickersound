@@ -10,7 +10,7 @@ import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { hasFfmpeg, INSTALL_HINT, missingEncoders, probe } from './ffmpeg.js';
 import { buildSticker } from './media.js';
-import { MAX_SECONDS, UPLOAD_INPUT_GUARD } from './recipe.js';
+import { AUDIO_INPUT_GUARD, clampAudioStart, MAX_SECONDS, UPLOAD_INPUT_GUARD } from './recipe.js';
 import { withPackMetadata } from './webp.js';
 import { createWhatsApp } from './whatsapp.js';
 
@@ -22,6 +22,10 @@ const PORT = Number(process.env.PORT) || 4827;
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 const MAX_JSON_BYTES = 16 * 1024;
 const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi', '3gp']);
+// A separate sound can also come from another video.
+const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'wav', 'flac', ...VIDEO_EXTENSIONS]);
+// The separate sound keeps this name in data/work, so a new video does not erase it.
+const TRACK_PREFIX = 'trilha.';
 
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -55,6 +59,7 @@ const whatsapp = createWhatsApp({ dataDir: DATA_DIR });
 
 // One video at a time: what was uploaded and the sticker made from it.
 let video = null; // { file, duration, hasAudio }
+let track = null; // separate sound: { file, duration }
 let sticker = null; // { start, duration, kb, audioSeconds }
 let busy = false;
 
@@ -148,9 +153,36 @@ function requireFfmpeg() {
   if (!hasFfmpeg) throw new HttpError(500, ffmpegProblem());
 }
 
+function extensionOf(url) {
+  return path.extname(url.searchParams.get('nome') || '').slice(1).toLowerCase();
+}
+
+// Streams the request body to file, stopping at the size limit.
+async function receive(req, file) {
+  let received = 0;
+  await pipeline(
+    req,
+    async function* limit(stream) {
+      for await (const chunk of stream) {
+        received += chunk.length;
+        if (received > MAX_UPLOAD_BYTES) throw new HttpError(413, 'Arquivo maior que 500 MB.');
+        yield chunk;
+      }
+    },
+    fs.createWriteStream(file),
+  );
+}
+
+async function clearWork({ keepTrack }) {
+  for (const name of await fsp.readdir(WORK_DIR)) {
+    if (keepTrack && name.startsWith(TRACK_PREFIX)) continue;
+    await fsp.rm(path.join(WORK_DIR, name), { force: true });
+  }
+}
+
 async function handleUpload(req, url) {
   requireFfmpeg();
-  const extension = path.extname(url.searchParams.get('nome') || '').slice(1).toLowerCase();
+  const extension = extensionOf(url);
   if (!VIDEO_EXTENSIONS.has(extension)) {
     throw new HttpError(400, 'Formato não aceito. Use um vídeo MP4, MOV, M4V, WebM, MKV, AVI ou 3GP.');
   }
@@ -159,21 +191,11 @@ async function handleUpload(req, url) {
   return exclusive(async () => {
     video = null;
     sticker = null;
-    for (const name of await fsp.readdir(WORK_DIR)) await fsp.rm(path.join(WORK_DIR, name), { force: true });
+    // A separate sound chosen before stays, so the video can be swapped.
+    await clearWork({ keepTrack: true });
 
     const file = path.join(WORK_DIR, `video.${extension}`);
-    let received = 0;
-    await pipeline(
-      req,
-      async function* limit(stream) {
-        for await (const chunk of stream) {
-          received += chunk.length;
-          if (received > MAX_UPLOAD_BYTES) throw new HttpError(413, 'Vídeo maior que 500 MB.');
-          yield chunk;
-        }
-      },
-      fs.createWriteStream(file),
-    );
+    await receive(req, file);
 
     let info;
     try {
@@ -187,11 +209,53 @@ async function handleUpload(req, url) {
   });
 }
 
+async function removeTrack() {
+  track = null;
+  sticker = null;
+  for (const name of await fsp.readdir(WORK_DIR)) {
+    if (name.startsWith(TRACK_PREFIX)) await fsp.rm(path.join(WORK_DIR, name), { force: true });
+  }
+}
+
+// A sound file (or another video) whose sound replaces the video's own.
+async function handleAudioUpload(req, url) {
+  requireFfmpeg();
+  const extension = extensionOf(url);
+  if (!AUDIO_EXTENSIONS.has(extension)) {
+    throw new HttpError(400, 'Formato não aceito. Use um áudio MP3, M4A, AAC, OGG, Opus, WAV ou FLAC, ou um vídeo.');
+  }
+  if (Number(req.headers['content-length']) > MAX_UPLOAD_BYTES) throw new HttpError(413, 'Áudio maior que 500 MB.');
+
+  return exclusive(async () => {
+    // Read the new sound beside the old one: if it fails, the old one stays.
+    const incoming = path.join(WORK_DIR, `novo-${TRACK_PREFIX}${extension}`);
+    try {
+      await receive(req, incoming);
+      let info;
+      try {
+        info = await probe(incoming, { inputGuard: AUDIO_INPUT_GUARD });
+      } catch {
+        throw new HttpError(400, 'Não consegui ler esse arquivo como áudio.');
+      }
+      if (!info.hasAudio || !(info.audioDuration > 0)) throw new HttpError(400, 'Esse arquivo não tem som.');
+
+      await removeTrack();
+      const file = path.join(WORK_DIR, `${TRACK_PREFIX}${extension}`);
+      await fsp.rename(incoming, file);
+      track = { file, duration: info.audioDuration };
+      return { duration: track.duration };
+    } finally {
+      await fsp.rm(incoming, { force: true });
+    }
+  });
+}
+
 async function handleBuild(req) {
-  const { start, duration, fit } = await readJson(req);
+  const { start, duration, fit, audioStart } = await readJson(req);
   if (!video) throw new HttpError(400, 'Escolha um vídeo primeiro.');
   return exclusive(async () => {
     sticker = null;
+    const audio = track ? { file: track.file, start: clampAudioStart(audioStart, track.duration) } : null;
     sticker = await buildSticker({
       input: video.file,
       workDir: WORK_DIR,
@@ -200,7 +264,9 @@ async function handleBuild(req) {
       start,
       duration,
       fit,
+      soundTrack: audio,
     });
+    sticker = { ...sticker, audioStart: audio ? audio.start : null };
     return sticker;
   });
 }
@@ -208,7 +274,7 @@ async function handleBuild(req) {
 async function handleSend(req) {
   const { packName, author } = await readJson(req);
   if (!sticker) throw new HttpError(400, 'Crie a figurinha primeiro.');
-  if (!sticker.audioSeconds) throw new HttpError(400, 'Esse vídeo não tem som.');
+  if (!sticker.audioSeconds) throw new HttpError(400, 'Esse vídeo não tem som. Escolha um áudio separado.');
   if (whatsapp.getStatus().state !== 'open') throw new HttpError(409, 'Conecte o WhatsApp antes de enviar.');
   return exclusive(async () => {
     const clean = (value) => String(value || '').trim().slice(0, 60) || 'Figuráudio';
@@ -249,6 +315,11 @@ async function route(req, res) {
       });
     case 'POST /api/video':
       return sendJson(res, 200, await handleUpload(req, url));
+    case 'POST /api/audio':
+      return sendJson(res, 200, await handleAudioUpload(req, url));
+    case 'POST /api/audio/remover':
+      await exclusive(removeTrack);
+      return sendJson(res, 200, {});
     case 'POST /api/figurinha':
       return sendJson(res, 200, await handleBuild(req));
     case 'POST /api/enviar':

@@ -12,7 +12,8 @@ import {
   stickerArgs,
 } from './recipe.js';
 
-export async function buildSticker({ input, workDir, totalSeconds, hasAudio, start, duration, fit }) {
+// soundTrack: optional separate sound { file, start } that replaces the video's own.
+export async function buildSticker({ input, workDir, totalSeconds, hasAudio, start, duration, fit, soundTrack }) {
   const trim = clampTrim(start, duration, totalSeconds);
   const clip = path.join(workDir, 'clip.mov');
   const sticker = path.join(workDir, 'figurinha.webp');
@@ -20,7 +21,7 @@ export async function buildSticker({ input, workDir, totalSeconds, hasAudio, sta
   await fs.rm(audio, { force: true });
 
   try {
-    await ffmpeg(clipArgs({ input, output: clip, ...trim, fit: fit === 'contain' ? 'contain' : 'cover' }));
+    await ffmpeg(clipArgs({ input, output: clip, ...trim, fit: fit === 'contain' ? 'contain' : 'cover', audio: soundTrack }));
 
     let kb = Infinity;
     for (const step of STICKER_STEPS) {
@@ -33,7 +34,7 @@ export async function buildSticker({ input, workDir, totalSeconds, hasAudio, sta
     }
 
     let audioSeconds = 0;
-    if (hasAudio) {
+    if (soundTrack || hasAudio) {
       await ffmpeg(audioArgs({ input: clip, output: audio }));
       audioSeconds = (await probe(audio)).duration;
     }

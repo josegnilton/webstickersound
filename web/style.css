@@ -118,8 +118,8 @@ a { color: inherit; text-underline-offset: 3px; }
 }
 .timeline canvas { width: 100%; height: 100%; }
 .dim { position: absolute; top: 0; bottom: 0; background: rgb(255 255 255 / 0.7); pointer-events: none; }
-#dim-left { left: 0; }
-#dim-right { right: 0; }
+#dim-left, #sound-dim-left { left: 0; }
+#dim-right, #sound-dim-right { right: 0; }
 .selection { position: absolute; top: 0; bottom: 0; border: 3px solid var(--ink); border-radius: 8px; cursor: grab; }
 .selection:active { cursor: grabbing; }
 .handle { position: absolute; top: 0; bottom: 0; width: 18px; cursor: ew-resize; }
@@ -155,6 +155,13 @@ a { color: inherit; text-underline-offset: 3px; }
 .listen[aria-pressed="true"] .icon-pause { display: inline; }
 
 .hint { margin-top: 10px; font-size: 13px; color: var(--ink-3); }
+
+/* Separate sound */
+.sound { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.sound-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.sound-name { flex: 1; min-width: 0; font-size: 14px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sound-timeline { height: 44px; }
+.sound-timeline .selection { border-color: var(--green-press); }
 
 /* ---------- Sticker ---------- */
 
@@ -249,6 +256,7 @@ dialog ol { padding-left: 20px; color: var(--ink-2); font-size: 15px; display: g
   .controls { display: grid; grid-template-columns: 1fr 1fr; }
   .controls .field:nth-child(3), .listen { grid-column: 1 / -1; }
   .segmented label { flex: 1; text-align: center; }
+  .sound-name { flex-basis: calc(100% - 60px); }
   .pack-fields { grid-template-columns: 1fr; }
 }
 

@@ -26,6 +26,20 @@ export const UPLOAD_INPUT_GUARD = [
   '-format_whitelist', 'mov,matroska,avi',
 ];
 
+// Same idea for a separate sound file: local audio containers only (MP3, M4A,
+// Ogg/Opus, WAV, FLAC, AAC), plus video containers to take the sound of
+// another video.
+export const AUDIO_INPUT_GUARD = [
+  '-protocol_whitelist', 'file',
+  '-format_whitelist', 'mov,matroska,avi,mp3,ogg,wav,flac,aac',
+];
+
+// Where the separate sound starts, so that at least a moment of it is left.
+export function clampAudioStart(start, total) {
+  const length = Number.isFinite(total) && total > 0 ? total : 0;
+  return round(Math.min(Math.max(0, Number(start) || 0), Math.max(0, length - MIN_SECONDS)));
+}
+
 export function clampTrim(start, duration, total) {
   const length = Number.isFinite(total) && total > 0 ? total : MAX_SECONDS;
   const from = Math.min(Math.max(0, Number(start) || 0), Math.max(0, length - MIN_SECONDS));
@@ -47,12 +61,18 @@ function frameFilter(fit) {
 
 // Step 1: decode the source once. Cut the piece, frame it as a 512 square with
 // alpha, and keep the sound uncompressed, so the next steps read a small file.
-export function clipArgs({ input, output, start, duration, fit }) {
+// audio: optional { file, start } to use a separate sound instead of the
+// video's own, cut to the same length from its own start time.
+export function clipArgs({ input, output, start, duration, fit, audio }) {
+  const soundInput = audio
+    ? [...AUDIO_INPUT_GUARD, '-ss', String(audio.start), '-t', String(duration), '-i', audio.file]
+    : [];
   return [
     ...UPLOAD_INPUT_GUARD,
     '-ss', String(start), '-t', String(duration), '-i', input,
+    ...soundInput,
     // Capital V skips cover art stored as a video stream.
-    '-map', '0:V:0', '-map', '0:a:0?',
+    '-map', '0:V:0', '-map', audio ? '1:a:0' : '0:a:0?',
     '-vf', `fps=${CLIP_FPS},${frameFilter(fit)}`,
     '-c:v', 'png', '-c:a', 'pcm_s16le', '-ar', '48000',
     output,

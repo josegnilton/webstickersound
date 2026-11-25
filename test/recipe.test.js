@@ -8,7 +8,9 @@ import test from 'node:test';
 import { ffmpeg, hasFfmpeg, probe } from '../server/ffmpeg.js';
 import { isAnimatedWebp } from '../server/webp.js';
 import {
+  AUDIO_INPUT_GUARD,
   audioArgs,
+  clampAudioStart,
   clampTrim,
   clipArgs,
   MAX_SECONDS,
@@ -34,6 +36,7 @@ test.before(async () => {
     '-f', 'lavfi', '-i', 'testsrc2=size=360x640:rate=30:duration=3',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', at('silent.mp4'),
   ]);
+  await ffmpeg(['-f', 'lavfi', '-i', 'sine=frequency=880:duration=8', '-c:a', 'flac', at('song.flac')]);
 });
 
 test.after(async () => {
@@ -80,4 +83,23 @@ test('a silent video still gives a sticker', options, async () => {
   assert.equal((await probe(at('silent.mov'))).hasAudio, false);
   await runRecipe(stickerArgs({ input: at('silent.mov'), output: at('silent.webp'), quality: 60, fps: 15 }));
   assert.equal(isAnimatedWebp(await fs.readFile(at('silent.webp'))), true);
+});
+
+test('the start of a separate sound leaves at least half a second', () => {
+  assert.equal(clampAudioStart(3, 8), 3);
+  assert.equal(clampAudioStart(20, 8), 7.5);
+  assert.equal(clampAudioStart(-1, 8), 0);
+});
+
+test('a separate sound replaces the sound of the video', options, async () => {
+  const song = await probe(at('song.flac'), { inputGuard: AUDIO_INPUT_GUARD });
+  assert.ok(song.audioDuration > 7.5, `${song.audioDuration} s`);
+  await runRecipe(clipArgs({
+    input: at('silent.mp4'), output: at('mixed.mov'), start: 0, duration: 2, fit: 'cover',
+    audio: { file: at('song.flac'), start: 5 },
+  }));
+  assert.equal((await probe(at('mixed.mov'))).hasAudio, true);
+  await runRecipe(audioArgs({ input: at('mixed.mov'), output: at('mixed.ogg') }));
+  const sound = await probe(at('mixed.ogg'));
+  assert.ok(Math.abs(sound.duration - 2) < 0.2, `${sound.duration} s`);
 });

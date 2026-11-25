@@ -130,6 +130,8 @@ export async function probe(file, { inputGuard = [] } = {}) {
     duration,
     hasVideo: Boolean(video),
     hasAudio: Boolean(audio),
+    // Length of the sound alone, for separate sound files.
+    audioDuration: Number(audio?.duration) || clockToSeconds(audio?.tags?.DURATION) || Number(info.format?.duration) || 0,
     width: video?.width || 0,
     height: video?.height || 0,
     // A still image probes as one frame with a duration of a frame or less.
