@@ -169,6 +169,10 @@ Testa a conversão com o FFmpeg (quando instalado), os metadados do WebP e os by
 
 ---
 
+## Contribuir
+
+Quer mudar alguma coisa? Faça um fork e abra um Pull Request. O passo a passo e os combinados estão em [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Créditos
 
 - O formato da mensagem de figurinha com som foi baseado no [Figaudio](https://github.com/pandaNinja9714/Figaudio) (Apache-2.0).
