@@ -42,6 +42,7 @@ const el = {
   qrImage: $('qr-image'),
   qrWaiting: $('qr-waiting'),
   qrClose: $('qr-close'),
+  qrNew: $('qr-new'),
 };
 
 const MIN_SECONDS = 0.5;
@@ -110,6 +111,7 @@ function renderWhatsApp() {
     el.qrWaiting.hidden = false;
     el.qrWaiting.textContent = wa.note || 'Gerando o código…';
   }
+  el.qrNew.disabled = wa.state === 'connecting';
   if (wa.state === 'open' && el.qrDialog.open) el.qrDialog.close();
   renderSend();
 }
@@ -144,6 +146,21 @@ async function connectWhatsApp() {
 }
 
 el.qrClose.addEventListener('click', () => el.qrDialog.close());
+
+// Starts the linking over: useful when the phone could not link or the code expired.
+el.qrNew.addEventListener('click', async () => {
+  el.qrImage.hidden = true;
+  el.qrWaiting.hidden = false;
+  el.qrWaiting.textContent = 'Gerando um código novo…';
+  el.qrNew.disabled = true;
+  try {
+    state.whatsapp = await api('/api/whatsapp/novo-qr', { method: 'POST' });
+    renderWhatsApp();
+  } catch (error) {
+    el.qrWaiting.textContent = error.message;
+    el.qrNew.disabled = false;
+  }
+});
 
 el.disconnect.addEventListener('click', async () => {
   const ok = confirm('Desconectar o WhatsApp deste computador? A conexão salva é apagada e você vai precisar ler o QR Code de novo.');
@@ -444,8 +461,9 @@ function renderSend() {
   const connected = state.whatsapp.state === 'open';
   const ready = Boolean(state.sticker?.audioSeconds) && !state.building;
   if (!connected) {
-    el.send.textContent = state.whatsapp.state === 'off' ? 'Conectar o WhatsApp' : 'Conectando…';
-    el.send.disabled = state.whatsapp.state !== 'off';
+    const labels = { off: 'Conectar o WhatsApp', qr: 'Mostrar o QR Code', connecting: 'Conectando…' };
+    el.send.textContent = labels[state.whatsapp.state];
+    el.send.disabled = state.whatsapp.state === 'connecting';
   } else {
     el.send.textContent = state.sending ? 'Enviando…' : 'Enviar para o meu WhatsApp';
     el.send.disabled = !ready || state.sending;

@@ -132,6 +132,19 @@ export function createWhatsApp({ dataDir }) {
       if (await hasSession()) await this.connect();
     },
 
+    // Drops the current linking attempt and starts over with a new QR code.
+    // A linked account is left alone.
+    async newQr() {
+      if (status.state === 'open') return;
+      wanted = true;
+      const current = sock;
+      sock = null;
+      current?.end(undefined);
+      if (!(await hasSession())) await fs.rm(sessionDir, { recursive: true, force: true });
+      setStatus({ state: 'connecting' });
+      start().catch(fail);
+    },
+
     async logout() {
       wanted = false;
       const current = sock;

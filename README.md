@@ -14,7 +14,7 @@ Roda no seu computador. Cada pessoa usa a própria conta: você conecta o seu Wh
 >
 > Antes de rodar, analise o que ele vai fazer: leia o código, entenda as dependências e decida se você confia nelas. Ele conecta na sua conta do WhatsApp e guarda essa conexão no seu computador.
 >
-> O envio usa a [Baileys](https://github.com/WhiskeySockets/Baileys), uma biblioteca **não oficial** do WhatsApp, e o WhatsApp pode bloquear contas que usam clientes não oficiais.
+> O envio usa a [Baileys](https://github.com/WhiskeySockets/Baileys), uma biblioteca **não oficial** do WhatsApp. Para uso pessoal, como mandar algumas figurinhas para você mesmo, o risco na prática é baixo, **contanto que você não faça flood** (muitas mensagens em sequência). Mas o risco não é zero: clientes não oficiais vão contra os Termos do WhatsApp, e a conta pode ser bloqueada.
 >
 > **Use por sua conta e risco. Não me responsabilizo por nada que aconteça com a sua conta, o seu computador ou os seus dados.** O software é fornecido "como está", sem garantia de nenhum tipo (veja a [licença](LICENSE)).
 
@@ -92,6 +92,8 @@ Deixe a janela do terminal aberta enquanto usa. Para encerrar, feche a janela ou
 2. No celular, abra o WhatsApp e vá em **Aparelhos conectados > Conectar aparelho**.
 3. Leia o QR Code que aparece na tela.
 
+Se o código expirar ou o celular não conseguir conectar, clique em **Gerar novo QR Code** e leia de novo.
+
 Pronto: o topo da página mostra **WhatsApp conectado**. A conexão fica salva no seu computador, então você só faz isso uma vez.
 
 ### 6. Faça a figurinha
@@ -113,7 +115,7 @@ Também dá para baixar a figurinha (`.webp`) e o som (`.ogg`) separados pelos l
 | O que aparece | O que fazer |
 | --- | --- |
 | **"FFmpeg não foi encontrado"** | Instale o FFmpeg (passo 1), feche o terminal, abra de novo e rode `npm start`. |
-| **O celular diz "sem conexão" ao ler o QR Code** | Confira a internet do computador e do celular, feche o QR e clique em **Conectar o WhatsApp** de novo. |
+| **O celular diz "sem conexão" ao ler o QR Code** | Confira a internet do computador e do celular, clique em **Gerar novo QR Code** e leia o código novo. |
 | **"A porta 4827 já está em uso"** | O Figuráudio já está aberto em outra janela. Use `http://127.0.0.1:4827` ou feche a outra janela. Para usar outra porta: `PORT=5000 npm start` (no PowerShell: `$env:PORT=5000; npm start`). |
 | **"Esse vídeo não tem som"** | O vídeo não tem faixa de áudio. A figurinha é criada, mas sai muda e não pode ser enviada com som. |
 | **"A figurinha passou de 500 KB"** | O WhatsApp limita figurinhas animadas a 500 KB. Escolha um trecho mais curto. |

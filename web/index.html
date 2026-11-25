@@ -137,7 +137,13 @@
       <p id="qr-waiting">Gerando o código…</p>
     </div>
     <p class="hint">A conexão fica salva neste computador, na pasta <code>data/session</code>.</p>
-    <button class="btn secondary" type="button" id="qr-close">Fechar</button>
+    <div class="dialog-actions">
+      <button class="btn secondary" type="button" id="qr-new">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg>
+        Gerar novo QR Code
+      </button>
+      <button class="btn secondary" type="button" id="qr-close">Fechar</button>
+    </div>
   </dialog>
 
   <script type="module" src="/app.js"></script>

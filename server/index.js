@@ -222,6 +222,9 @@ async function route(req, res) {
     case 'POST /api/whatsapp/conectar':
       await whatsapp.connect();
       return sendJson(res, 200, whatsapp.getStatus());
+    case 'POST /api/whatsapp/novo-qr':
+      await whatsapp.newQr();
+      return sendJson(res, 200, whatsapp.getStatus());
     case 'POST /api/whatsapp/desconectar':
       await whatsapp.logout();
       return sendJson(res, 200, whatsapp.getStatus());
