@@ -122,6 +122,8 @@ a { color: inherit; text-underline-offset: 3px; }
 #dim-right, #sound-dim-right { right: 0; }
 .selection { position: absolute; top: 0; bottom: 0; border: 3px solid var(--ink); border-radius: 8px; cursor: grab; }
 .selection:active { cursor: grabbing; }
+.selection.narrow { min-width: 14px; }
+.selection.narrow .handle { display: none; }
 .handle { position: absolute; top: 0; bottom: 0; width: 18px; cursor: ew-resize; }
 .handle::after {
   content: ""; position: absolute; top: 50%; left: 7px; width: 4px; height: 20px; margin-top: -10px;

@@ -63,6 +63,8 @@ const MIN_SECONDS = 0.5;
 // browser tab out of memory.
 const MAX_WAVEFORM_SECONDS = 600;
 const BUSY_RETRY_MS = 1500;
+const NARROW_SELECTION_PX = 48;
+const NARROW_GRAB_PX = 12;
 const DEFAULT_SECONDS = 5;
 const REBUILD_DELAY_MS = 500;
 const STATUS_INTERVAL_MS = 1500;
@@ -322,6 +324,7 @@ function renderTrim() {
   el.selection.style.width = `${width}%`;
   el.dimLeft.style.width = `${left}%`;
   el.dimRight.style.width = `${Math.max(0, 100 - left - width)}%`;
+  el.selection.classList.toggle('narrow', isNarrowSelection());
   if (document.activeElement !== el.start) el.start.value = state.start.toFixed(1);
   if (document.activeElement !== el.duration) el.duration.value = state.length.toFixed(1);
   el.start.max = Math.max(0, total - MIN_SECONDS).toFixed(1);
@@ -332,6 +335,12 @@ function renderTrim() {
     el.playhead.style.left = `${left}%`;
     if (el.video.readyState >= 1) el.video.currentTime = state.start;
   }
+}
+
+// Narrower than this, the edges cannot be told apart from the middle.
+function isNarrowSelection() {
+  const width = el.timeline.getBoundingClientRect().width;
+  return width > 0 && (state.length / state.video.duration) * width < NARROW_SELECTION_PX;
 }
 
 function renderTicks() {
@@ -374,7 +383,10 @@ function drawBars(canvas, peaks) {
   }
 }
 window.addEventListener('resize', () => {
-  if (state.video) drawWave();
+  if (state.video) {
+    drawWave();
+    el.selection.classList.toggle('narrow', isNarrowSelection());
+  }
   if (state.track) drawBars(el.soundWave, state.trackPeaks);
 });
 
@@ -384,8 +396,13 @@ el.timeline.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   const rect = el.timeline.getBoundingClientRect();
   const toTime = (x) => ((x - rect.left) / rect.width) * state.video.duration;
-  const handle = event.target.dataset?.handle;
-  const onSelection = event.target === el.selection;
+  // In a long video the selection is only a few pixels wide and its edges
+  // would cover it: then any grab near it moves it instead of resizing.
+  const narrow = isNarrowSelection();
+  const box = el.selection.getBoundingClientRect();
+  const nearSelection = event.clientX >= box.left - NARROW_GRAB_PX && event.clientX <= box.right + NARROW_GRAB_PX;
+  const handle = narrow ? null : event.target.dataset?.handle;
+  const onSelection = narrow ? nearSelection : event.target === el.selection;
   const grabOffset = toTime(event.clientX) - state.start;
   const end = state.start + state.length;
 

@@ -14,6 +14,10 @@ export const STICKER_STEPS = [
   { quality: 25, fps: 12 },
   { quality: 15, fps: 10 },
   { quality: 8, fps: 8 },
+  // Busy, detailed videos (lots of texture or motion) need fewer frames.
+  { quality: 10, fps: 6 },
+  { quality: 5, fps: 5 },
+  { quality: 0, fps: 4 },
 ];
 
 const CLIP_FPS = 24;
