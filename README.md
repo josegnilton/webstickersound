@@ -8,7 +8,15 @@ Roda no seu computador. Cada pessoa usa a própria conta: você conecta o seu Wh
 - Sem conta, sem servidor de terceiros: o vídeo não sai do seu computador.
 - Funciona no Windows, macOS e Linux.
 
-> **Aviso:** o envio usa a [Baileys](https://github.com/WhiskeySockets/Baileys), uma biblioteca **não oficial** do WhatsApp. O WhatsApp pode bloquear contas que usam clientes não oficiais. Use por sua conta e risco, de preferência sem mandar muitas figurinhas seguidas.
+> **Leia antes de usar**
+>
+> Fiz este projeto para me divertir com os amigos. Não é um produto, não tem suporte e pode parar de funcionar a qualquer momento.
+>
+> Antes de rodar, analise o que ele vai fazer: leia o código, entenda as dependências e decida se você confia nelas. Ele conecta na sua conta do WhatsApp e guarda essa conexão no seu computador.
+>
+> O envio usa a [Baileys](https://github.com/WhiskeySockets/Baileys), uma biblioteca **não oficial** do WhatsApp, e o WhatsApp pode bloquear contas que usam clientes não oficiais.
+>
+> **Use por sua conta e risco. Não me responsabilizo por nada que aconteça com a sua conta, o seu computador ou os seus dados.** O software é fornecido "como está", sem garantia de nenhum tipo (veja a [licença](LICENSE)).
 
 ---
 
