@@ -3,108 +3,143 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FigSom</title>
+  <title>Figuráudio</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true"></span>
-      <span class="brand-name">FigSom</span>
-      <span class="brand-tag">figurinha com som</span>
-    </div>
-    <div class="account">
-      <span class="status" id="wa-status"><span class="dot"></span><span id="wa-status-text">Verificando…</span></span>
-      <button class="button ghost" id="wa-button" type="button" hidden>Conectar WhatsApp</button>
-    </div>
+  <header class="top">
+    <span class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M3 6v4M6 4v8M9 2v12M12 5v6"/></svg>
+      </span>
+      Figuráudio
+    </span>
+    <p class="wa-status" id="wa-status" data-state="off">
+      <span class="dot" aria-hidden="true"></span>
+      <span id="wa-status-text">Verificando o WhatsApp…</span>
+    </p>
   </header>
 
-  <p class="banner" id="banner" hidden></p>
+  <p class="banner" id="banner" role="alert" hidden></p>
 
   <main class="layout">
     <section class="panel" aria-labelledby="video-title">
-      <h2 id="video-title">1. Vídeo</h2>
+      <h1 id="video-title" class="panel-title"><span class="step" aria-hidden="true">1</span>Escolha o vídeo</h1>
 
-      <label class="dropzone" id="dropzone">
-        <input type="file" id="file-input" accept="video/*,.mkv,.gif" hidden>
-        <strong>Arraste um vídeo aqui</strong>
-        <span>ou clique para escolher. MP4, MOV, WebM, MKV, AVI ou GIF.</span>
-      </label>
+      <div class="drop" id="drop">
+        <input class="visually-hidden" type="file" id="file-input" accept="video/*,.mkv,.mov,.m4v,.webm,.avi,.3gp">
+        <button class="btn primary" type="button" id="choose-button">Escolher vídeo</button>
+        <p class="drop-hint">ou arraste o arquivo para cá</p>
+        <p class="drop-formats">MP4, MOV, WebM, MKV ou AVI, até 500 MB</p>
+      </div>
 
       <div class="editor" id="editor" hidden>
-        <video id="source-video" controls playsinline></video>
+        <div class="stage">
+          <video id="video" playsinline preload="auto"></video>
+          <div class="frame-guide" id="frame-guide" aria-hidden="true"></div>
+        </div>
 
-        <div class="field">
-          <label for="start">Início <output id="start-value">0,0 s</output></label>
-          <input type="range" id="start" min="0" max="0" step="0.1" value="0">
+        <div class="file-row">
+          <span class="file-name" id="file-name"></span>
+          <button class="link" type="button" id="replace-button">Trocar vídeo</button>
         </div>
-        <div class="field">
-          <label for="duration">Duração <output id="duration-value">5,0 s</output></label>
-          <input type="range" id="duration" min="0.5" max="10" step="0.1" value="5">
-        </div>
-        <div class="field">
-          <span class="field-label">Enquadramento</span>
-          <div class="segmented" role="radiogroup" aria-label="Enquadramento">
-            <label><input type="radio" name="fit" value="cover" checked><span>Preencher</span></label>
-            <label><input type="radio" name="fit" value="contain"><span>Mostrar tudo</span></label>
+
+        <div class="timeline" id="timeline" aria-hidden="true">
+          <canvas id="wave"></canvas>
+          <div class="dim" id="dim-left"></div>
+          <div class="dim" id="dim-right"></div>
+          <div class="selection" id="selection">
+            <span class="handle handle-start" data-handle="start"></span>
+            <span class="handle handle-end" data-handle="end"></span>
           </div>
+          <div class="playhead" id="playhead"></div>
         </div>
-        <button class="button ghost" id="replace-button" type="button">Trocar vídeo</button>
+        <div class="ticks" id="ticks" aria-hidden="true"></div>
+
+        <div class="controls">
+          <div class="field">
+            <label for="start">Início (s)</label>
+            <input id="start" type="number" inputmode="decimal" min="0" step="0.1" value="0">
+          </div>
+          <div class="field">
+            <label for="duration">Duração (s)</label>
+            <input id="duration" type="number" inputmode="decimal" min="0.5" max="10" step="0.1" value="5">
+          </div>
+          <div class="field">
+            <span class="field-label" id="fit-label">Enquadramento</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="fit-label">
+              <label><input type="radio" name="fit" value="cover" checked><span>Preencher</span></label>
+              <label><input type="radio" name="fit" value="contain"><span>Mostrar tudo</span></label>
+            </div>
+          </div>
+          <button class="btn secondary listen" type="button" id="listen-button" aria-pressed="false">
+            <svg class="icon-play" width="14" height="14" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.5l11 6.5-11 6.5z" fill="currentColor"/></svg>
+            <svg class="icon-pause" width="14" height="14" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3h3.5v14H5zM11.5 3H15v14h-3.5z" fill="currentColor"/></svg>
+            <span>Ouvir trecho</span>
+          </button>
+        </div>
+        <p class="hint">Até 10 segundos. Arraste a seleção ou as bordas dela na barra.</p>
       </div>
     </section>
 
     <section class="panel" aria-labelledby="sticker-title">
-      <h2 id="sticker-title">2. Figurinha</h2>
+      <h2 id="sticker-title" class="panel-title"><span class="step" aria-hidden="true">2</span>Confira a figurinha</h2>
 
-      <div class="preview" id="preview">
-        <p class="preview-empty" id="preview-empty">A figurinha aparece aqui depois que você enviar um vídeo.</p>
-        <button class="sticker" id="sticker-button" type="button" hidden title="Tocar o som">
-          <img id="sticker-image" alt="Prévia da figurinha" width="512" height="512">
-          <span class="sound-badge" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
-          </span>
+      <div class="square" id="square">
+        <p class="square-empty" id="square-empty">A figurinha aparece aqui depois que você escolher o vídeo.</p>
+        <img id="sticker-image" alt="Prévia da figurinha" hidden>
+        <button class="play" type="button" id="play-button" hidden>
+          <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.5l11 6.5-11 6.5z" fill="#fff"/></svg>
+          <span class="visually-hidden">Ouvir a figurinha</span>
         </button>
-        <p class="preview-progress" id="preview-progress" hidden>Convertendo…</p>
+        <span class="badge" id="badge" hidden></span>
+        <p class="working" id="working" hidden>Criando a figurinha…</p>
       </div>
       <audio id="sticker-audio" preload="auto"></audio>
+      <p class="status" id="sticker-status" role="status" aria-live="polite"></p>
 
-      <p class="meta" id="meta" hidden></p>
+      <h2 class="panel-title send-title"><span class="step" aria-hidden="true">3</span>Envie para o seu WhatsApp</h2>
 
-      <div class="send" id="send" hidden>
-        <div class="row">
-          <div class="field">
-            <label for="pack-name">Nome do pacote</label>
-            <input type="text" id="pack-name" maxlength="60" placeholder="FigSom">
-          </div>
-          <div class="field">
-            <label for="author">Autor</label>
-            <input type="text" id="author" maxlength="60" placeholder="FigSom">
-          </div>
+      <button class="btn primary" type="button" id="send-button" disabled>Enviar para o meu WhatsApp</button>
+      <p class="status" id="send-status" role="status" aria-live="polite"></p>
+
+      <details class="pack">
+        <summary>Nome do pacote e autor</summary>
+        <p class="hint">Aparecem quando alguém toca na figurinha.</p>
+        <div class="pack-fields">
+          <div class="field"><label for="pack-name">Pacote</label><input id="pack-name" type="text" maxlength="60" placeholder="Figuráudio"></div>
+          <div class="field"><label for="pack-author">Autor</label><input id="pack-author" type="text" maxlength="60" placeholder="Figuráudio"></div>
         </div>
-        <button class="button primary" id="send-button" type="button">Enviar para o meu WhatsApp</button>
-        <p class="hint" id="send-hint"></p>
-        <p class="downloads">
-          Baixar: <a href="/api/out/sticker.webp" download="figurinha.webp">figurinha.webp</a>
-          <a href="/api/out/audio.ogg" download="som.ogg" id="audio-download">som.ogg</a>
-        </p>
-      </div>
+      </details>
+
+      <p class="downloads" id="downloads" hidden>
+        Baixar:
+        <a href="/api/arquivo/figurinha.webp" download="figurinha.webp">figurinha (.webp)</a>
+        <a href="/api/arquivo/som.ogg" download="som.ogg" id="audio-download">som (.ogg)</a>
+      </p>
+
+      <button class="link danger" type="button" id="disconnect-button" hidden>Desconectar o WhatsApp</button>
     </section>
   </main>
 
-  <dialog id="qr-dialog">
-    <h2>Conectar o WhatsApp</h2>
+  <dialog id="qr-dialog" aria-labelledby="qr-title">
+    <h2 id="qr-title">Conectar o WhatsApp</h2>
     <ol>
-      <li>Abra o WhatsApp no celular.</li>
-      <li>Vá em <strong>Aparelhos conectados</strong> e toque em <strong>Conectar aparelho</strong>.</li>
+      <li>No celular, abra o WhatsApp.</li>
+      <li>Toque em <strong>Aparelhos conectados</strong> e depois em <strong>Conectar aparelho</strong>.</li>
       <li>Aponte a câmera para este código.</li>
     </ol>
     <div class="qr-box">
       <img id="qr-image" alt="QR Code para conectar o WhatsApp" width="260" height="260" hidden>
       <p id="qr-waiting">Gerando o código…</p>
     </div>
-    <button class="button ghost" id="qr-close" type="button">Fechar</button>
+    <p class="hint">A conexão fica salva neste computador, na pasta <code>data/session</code>.</p>
+    <button class="btn secondary" type="button" id="qr-close">Fechar</button>
   </dialog>
 
-  <script src="/app.js" type="module"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

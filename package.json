@@ -1,7 +1,7 @@
 {
-  "name": "figsom",
+  "name": "figuraudio",
   "version": "0.1.0",
-  "description": "Cria figurinhas com som para WhatsApp, com interface web local.",
+  "description": "Transforma um trecho de vídeo em figurinha com som e envia para o seu próprio WhatsApp. Roda no seu computador.",
   "private": true,
   "type": "module",
   "license": "Apache-2.0",

@@ -1,0 +1,5 @@
+Figuráudio
+
+O formato da mensagem de figurinha com som (server/sound-sticker.js) foi
+baseado no projeto Figaudio, de pandaNinja9714
+(https://github.com/pandaNinja9714/Figaudio), licenciado sob Apache-2.0.
