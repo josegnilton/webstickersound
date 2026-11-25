@@ -175,7 +175,6 @@ Quer mudar alguma coisa? Faça um fork e abra um Pull Request. O passo a passo e
 
 ## Créditos
 
-- O formato da mensagem de figurinha com som foi baseado no [Figaudio](https://github.com/pandaNinja9714/Figaudio) (Apache-2.0).
 - [Baileys](https://github.com/WhiskeySockets/Baileys): conexão com o WhatsApp.
 - [FFmpeg](https://ffmpeg.org): conversão de vídeo e áudio.
 
