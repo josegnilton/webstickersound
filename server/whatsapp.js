@@ -4,7 +4,7 @@ import path from 'node:path';
 import makeWASocket, {
   Browsers,
   DisconnectReason,
-  fetchLatestBaileysVersion,
+  fetchLatestWaWebVersion,
   generateWAMessageFromContent,
   jidNormalizedUser,
   prepareWAMessageMedia,
@@ -19,7 +19,7 @@ const QR_TIMED_OUT = 408;
 
 export function createWhatsApp({ dataDir }) {
   const sessionDir = path.join(dataDir, 'session');
-  const logger = pino({ level: 'warn' }, pino.destination({ dest: path.join(dataDir, 'whatsapp.log'), sync: false }));
+  const logger = pino({ level: 'info' }, pino.destination({ dest: path.join(dataDir, 'whatsapp.log'), sync: false }));
 
   let sock = null;
   let wanted = false;
@@ -43,7 +43,11 @@ export function createWhatsApp({ dataDir }) {
   async function start() {
     await fs.mkdir(sessionDir, { recursive: true });
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-    const { version } = await fetchLatestBaileysVersion();
+    // The phone refuses to link a client that reports an old WhatsApp Web
+    // version, and the one bundled with Baileys goes stale. Ask WhatsApp Web
+    // for the current one; on failure Baileys returns its bundled version.
+    const { version, isLatest } = await fetchLatestWaWebVersion({});
+    if (!isLatest) logger.warn({ version }, 'could not fetch the current WhatsApp Web version');
     const current = makeWASocket({
       version,
       auth: state,
