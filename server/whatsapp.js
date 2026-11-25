@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import makeWASocket, {
   Browsers,
+  buildAckStanza,
   DisconnectReason,
   fetchLatestWaWebVersion,
   generateWAMessageFromContent,
@@ -19,7 +20,18 @@ const QR_TIMED_OUT = 408;
 
 export function createWhatsApp({ dataDir }) {
   const sessionDir = path.join(dataDir, 'session');
-  const logger = pino({ level: 'info' }, pino.destination({ dest: path.join(dataDir, 'whatsapp.log'), sync: false }));
+  // Only warnings and errors, with message details removed: Baileys logs
+  // contacts' numbers and names at lower levels, and this file stays on disk.
+  const logger = pino(
+    {
+      level: 'warn',
+      redact: {
+        paths: ['key', 'msgAttrs', 'node', 'attrs', 'recv', 'sent', 'jid', 'addr', 'participant', 'histNotification', 'deviceJids'],
+        remove: true,
+      },
+    },
+    pino.destination({ dest: path.join(dataDir, 'whatsapp.log'), sync: false }),
+  );
 
   let sock = null;
   let wanted = false;
@@ -58,13 +70,24 @@ export function createWhatsApp({ dataDir }) {
     });
     sock = current;
 
+    // Baileys acknowledges server notifications with the account id, which
+    // does not exist until the QR code is scanned: it throws and the
+    // notification is never acknowledged, and the phone then fails to link
+    // ("sem conexão"). Acknowledge those ourselves until the account exists.
+    current.ws.on('CB:notification', (node) => {
+      if (state.creds.me?.id) return;
+      logger.warn({ event: 'ack-before-login', type: node.attrs.type }, 'acknowledging a notification received before login');
+      current.sendNode(buildAckStanza(node)).catch((error) => logger.warn({ err: error }, 'ack before login failed'));
+    });
+
     current.ev.on('creds.update', saveCreds);
     current.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
       if (sock !== current) return;
 
       if (qr) {
-        setStatus({ state: 'qr', qr: await QRCode.toDataURL(qr, { margin: 1, width: 360 }) });
+        setStatus({ state: 'qr', qr: await QRCode.toDataURL(qr, { margin: 4, width: 360 }) });
       }
+      if (connection) logger.warn({ event: 'connection', connection, code: lastDisconnect?.error?.output?.statusCode }, 'connection update');
       if (connection === 'open') {
         setStatus({ state: 'open', me: jidNormalizedUser(current.user.id).split('@')[0] });
       }
