@@ -8,9 +8,9 @@ import http from 'node:http';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
-import { hasFfmpeg, probe } from './ffmpeg.js';
+import { hasFfmpeg, INSTALL_HINT, missingEncoders, probe } from './ffmpeg.js';
 import { buildSticker } from './media.js';
-import { MAX_SECONDS } from './recipe.js';
+import { MAX_SECONDS, UPLOAD_INPUT_GUARD } from './recipe.js';
 import { withPackMetadata } from './webp.js';
 import { createWhatsApp } from './whatsapp.js';
 
@@ -37,14 +37,20 @@ const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "img-src 'self' blob: data:",
   "media-src 'self' blob:",
-  "style-src 'self' https://fonts.googleapis.com",
-  "font-src https://fonts.gstatic.com",
   "object-src 'none'",
   "base-uri 'none'",
   "frame-ancestors 'none'",
 ].join('; ');
 
-fs.mkdirSync(WORK_DIR, { recursive: true });
+// data/ holds the WhatsApp session: keep it private to this user.
+fs.mkdirSync(WORK_DIR, { recursive: true, mode: 0o700 });
+if (process.platform !== 'win32') fs.chmodSync(DATA_DIR, 0o700);
+// The last video is personal: do not keep it around between runs.
+for (const name of fs.readdirSync(WORK_DIR)) fs.rmSync(path.join(WORK_DIR, name), { force: true, recursive: true });
+
+// Last resort: a failed promise somewhere must not close the program.
+process.on('unhandledRejection', (error) => console.error('Erro inesperado:', error));
+
 const whatsapp = createWhatsApp({ dataDir: DATA_DIR });
 
 // One video at a time: what was uploaded and the sticker made from it.
@@ -59,8 +65,15 @@ class HttpError extends Error {
   }
 }
 
+// Other sites may not load anything from this server, not even as <img>.
+const COMMON_HEADERS = {
+  'cache-control': 'no-store',
+  'x-content-type-options': 'nosniff',
+  'cross-origin-resource-policy': 'same-origin',
+};
+
 function sendJson(res, status, body) {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+  res.writeHead(status, { ...COMMON_HEADERS, 'content-type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(body));
 }
 
@@ -71,12 +84,7 @@ async function sendFile(res, file, type) {
   } catch {
     throw new HttpError(404, 'Arquivo não encontrado.');
   }
-  res.writeHead(200, {
-    'content-type': type,
-    'cache-control': 'no-store',
-    'content-security-policy': CONTENT_SECURITY_POLICY,
-    'x-content-type-options': 'nosniff',
-  });
+  res.writeHead(200, { ...COMMON_HEADERS, 'content-type': type, 'content-security-policy': CONTENT_SECURITY_POLICY });
   res.end(data);
 }
 
@@ -89,11 +97,14 @@ async function readJson(req) {
     chunks.push(chunk);
   }
   if (!size) return {};
+  let value;
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
   } catch {
     throw new HttpError(400, 'Pedido inválido.');
   }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, 'Pedido inválido.');
+  return value;
 }
 
 // Other sites open in the same browser must not drive this server (it can
@@ -102,6 +113,12 @@ async function readJson(req) {
 function assertLocalRequest(req) {
   const allowedHosts = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
   if (!allowedHosts.includes(req.headers.host)) throw new HttpError(403, 'Host não permitido.');
+  // Browsers say where a request comes from; refuse API reads started by
+  // another site (the page itself sends same-origin).
+  const site = req.headers['sec-fetch-site'];
+  if (site && site !== 'same-origin' && site !== 'none' && req.url.startsWith('/api/')) {
+    throw new HttpError(403, 'Pedido não permitido.');
+  }
   if (req.method === 'GET') return;
   const origin = req.headers.origin;
   if (origin && !allowedHosts.some((host) => origin === `http://${host}`)) {
@@ -120,15 +137,22 @@ async function exclusive(task) {
   }
 }
 
+function ffmpegProblem() {
+  if (missingEncoders.length) {
+    return `O FFmpeg instalado não tem ${missingEncoders.join(', ')}. Instale uma versão completa (passo 1 do README).`;
+  }
+  return `FFmpeg não encontrado. ${INSTALL_HINT}, feche e abra o Figuráudio de novo.`;
+}
+
 function requireFfmpeg() {
-  if (!hasFfmpeg) throw new HttpError(500, 'FFmpeg não encontrado. Veja o passo 1 do README.');
+  if (!hasFfmpeg) throw new HttpError(500, ffmpegProblem());
 }
 
 async function handleUpload(req, url) {
   requireFfmpeg();
   const extension = path.extname(url.searchParams.get('nome') || '').slice(1).toLowerCase();
   if (!VIDEO_EXTENSIONS.has(extension)) {
-    throw new HttpError(400, 'Formato não aceito. Use um vídeo MP4, MOV, WebM, MKV ou AVI.');
+    throw new HttpError(400, 'Formato não aceito. Use um vídeo MP4, MOV, M4V, WebM, MKV, AVI ou 3GP.');
   }
   if (Number(req.headers['content-length']) > MAX_UPLOAD_BYTES) throw new HttpError(413, 'Vídeo maior que 500 MB.');
 
@@ -153,7 +177,7 @@ async function handleUpload(req, url) {
 
     let info;
     try {
-      info = await probe(file);
+      info = await probe(file, { inputGuard: UPLOAD_INPUT_GUARD });
     } catch {
       throw new HttpError(400, 'Não consegui ler esse arquivo como vídeo.');
     }
@@ -185,6 +209,7 @@ async function handleSend(req) {
   const { packName, author } = await readJson(req);
   if (!sticker) throw new HttpError(400, 'Crie a figurinha primeiro.');
   if (!sticker.audioSeconds) throw new HttpError(400, 'Esse vídeo não tem som.');
+  if (whatsapp.getStatus().state !== 'open') throw new HttpError(409, 'Conecte o WhatsApp antes de enviar.');
   return exclusive(async () => {
     const clean = (value) => String(value || '').trim().slice(0, 60) || 'Figuráudio';
     const webp = withPackMetadata(await fsp.readFile(path.join(WORK_DIR, 'figurinha.webp')), clean(packName), clean(author));
@@ -194,7 +219,12 @@ async function handleSend(req) {
 }
 
 async function serveStatic(res, pathname) {
-  const relative = pathname === '/' ? 'index.html' : decodeURIComponent(pathname.slice(1));
+  let relative;
+  try {
+    relative = pathname === '/' ? 'index.html' : decodeURIComponent(pathname.slice(1));
+  } catch {
+    throw new HttpError(404, 'Não encontrado.');
+  }
   const file = path.resolve(WEB_DIR, relative);
   const type = CONTENT_TYPES[path.extname(file)];
   if (!file.startsWith(WEB_DIR + path.sep) || !type) throw new HttpError(404, 'Não encontrado.');
@@ -212,7 +242,11 @@ async function route(req, res) {
 
   switch (`${req.method} ${url.pathname}`) {
     case 'GET /api/status':
-      return sendJson(res, 200, { ffmpeg: hasFfmpeg, whatsapp: whatsapp.getStatus() });
+      return sendJson(res, 200, {
+        ffmpeg: hasFfmpeg,
+        ffmpegProblem: hasFfmpeg ? null : ffmpegProblem(),
+        whatsapp: whatsapp.getStatus(),
+      });
     case 'POST /api/video':
       return sendJson(res, 200, await handleUpload(req, url));
     case 'POST /api/figurinha':
@@ -236,7 +270,9 @@ async function route(req, res) {
 
 const server = http.createServer((req, res) => {
   route(req, res).catch((error) => {
-    if (!error.status) console.error(error);
+    // A browser that gave up on an upload is not a server problem.
+    const aborted = error.code === 'ECONNRESET' || error.code === 'ERR_STREAM_PREMATURE_CLOSE';
+    if (!error.status && !aborted) console.error(error);
     if (res.headersSent) return res.destroy();
     // Drop the rest of a refused upload instead of reading it all.
     if (!req.complete) res.setHeader('connection', 'close');
@@ -267,7 +303,7 @@ server.on('error', (error) => {
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Figuráudio aberto em ${ADDRESS}`);
-  if (!hasFfmpeg) console.log('Atenção: FFmpeg não encontrado. Veja o passo 1 do README.');
+  if (!hasFfmpeg) console.log(`Atenção: ${ffmpegProblem()}`);
   console.log('Deixe esta janela aberta enquanto usa. Para encerrar, feche a janela ou aperte Ctrl+C.');
   whatsapp.resume().catch((error) => console.error(error));
   openBrowser();

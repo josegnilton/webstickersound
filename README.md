@@ -45,8 +45,10 @@ brew install node ffmpeg
 **Linux** (Debian/Ubuntu):
 
 ```bash
-sudo apt install nodejs npm ffmpeg
+sudo apt install ffmpeg
 ```
+
+O Node.js do `apt` costuma ser antigo demais. Instale a versão LTS pelo site oficial, [nodejs.org](https://nodejs.org), ou pelo gerenciador que você já usa.
 
 Depois de instalar, **feche e abra o terminal de novo** para ele encontrar os programas. Para conferir:
 
@@ -54,6 +56,8 @@ Depois de instalar, **feche e abra o terminal de novo** para ele encontrar os pr
 node --version
 ffmpeg -version
 ```
+
+O `node --version` precisa mostrar `v20` ou mais.
 
 ### 2. Baixe o Figuráudio
 
@@ -66,13 +70,17 @@ cd figuraudio
 
 Ou, no GitHub, clique em **Code > Download ZIP** e extraia a pasta.
 
+Coloque a pasta dentro da sua pasta de usuário (por exemplo, `Documentos`), e **não** numa pasta sincronizada com a nuvem (OneDrive, Google Drive, Dropbox) nem numa pasta compartilhada com outras pessoas: é ali que fica salva a conexão com o seu WhatsApp.
+
 ### 3. Instale as dependências (só na primeira vez)
 
 Dentro da pasta do projeto:
 
 ```bash
-npm install
+npm ci
 ```
+
+O `npm ci` instala exatamente as versões registradas no projeto.
 
 ### 4. Abra o Figuráudio
 
@@ -82,7 +90,7 @@ npm start
 
 A página abre sozinha no navegador, em `http://127.0.0.1:4827`. Se não abrir, copie esse endereço no navegador.
 
-No Windows, também dá para dar dois cliques em **`Abrir Figuraudio.cmd`**. Ele faz o passo 3 sozinho na primeira vez.
+No Windows, também dá para dar dois cliques em **`Abrir Figuraudio.cmd`**. Ele faz o passo 3 sozinho na primeira vez e abre uma janela preta: deixe ela aberta enquanto usa.
 
 Deixe a janela do terminal aberta enquanto usa. Para encerrar, feche a janela ou aperte `Ctrl+C`.
 
@@ -115,6 +123,8 @@ Também dá para baixar a figurinha (`.webp`) e o som (`.ogg`) separados pelos l
 | O que aparece | O que fazer |
 | --- | --- |
 | **"FFmpeg não foi encontrado"** | Instale o FFmpeg (passo 1), feche o terminal, abra de novo e rode `npm start`. |
+| **"O FFmpeg instalado não tem libwebp_anim" (ou libopus)** | Sua versão do FFmpeg é incompleta. Instale a versão completa pelos comandos do passo 1. |
+| **`npm ci` falha dizendo que precisa do Node.js 20** | Seu Node.js é antigo. Instale a versão LTS em [nodejs.org](https://nodejs.org). |
 | **O celular diz "sem conexão" ao ler o QR Code** | Confira a internet do computador e do celular, clique em **Gerar novo QR Code** e leia o código novo. |
 | **"A porta 4827 já está em uso"** | O Figuráudio já está aberto em outra janela. Use `http://127.0.0.1:4827` ou feche a outra janela. Para usar outra porta: `PORT=5000 npm start` (no PowerShell: `$env:PORT=5000; npm start`). |
 | **"Esse vídeo não tem som"** | O vídeo não tem faixa de áudio. A figurinha é criada, mas sai muda e não pode ser enviada com som. |
@@ -129,8 +139,8 @@ Também dá para baixar a figurinha (`.webp`) e o som (`.ogg`) separados pelos l
 Tudo fica na pasta `data/`, dentro do projeto:
 
 - `data/session/`: a conexão com o seu WhatsApp. **Quem tiver essa pasta consegue usar a sua conta.** Não compartilhe e não envie para o GitHub (ela já está no `.gitignore`). O botão **Desconectar** apaga essa pasta.
-- `data/work/`: o último vídeo e a última figurinha. É apagada a cada vídeo novo.
-- `data/whatsapp.log`: registro da conexão, útil se algo der errado.
+- `data/work/`: o último vídeo e a última figurinha. É apagada a cada vídeo novo e sempre que o Figuráudio abre.
+- `data/whatsapp.log`: registro de avisos e erros da conexão, útil se algo der errado. Os números e nomes dos contatos são retirados, mas mesmo assim **não publique esse arquivo**.
 
 ---
 

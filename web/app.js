@@ -46,6 +46,10 @@ const el = {
 };
 
 const MIN_SECONDS = 0.5;
+// Past this length, decoding the whole sound for the waveform can run the
+// browser tab out of memory.
+const MAX_WAVEFORM_SECONDS = 600;
+const BUSY_RETRY_MS = 1500;
 const DEFAULT_SECONDS = 5;
 const REBUILD_DELAY_MS = 500;
 const STATUS_INTERVAL_MS = 1500;
@@ -57,6 +61,8 @@ const state = {
   start: 0,
   length: DEFAULT_SECONDS,
   sticker: null, // { start, duration, kb, audioSeconds }
+  stale: false, // trim or framing changed since the sticker was built
+  loadId: 0,
   building: false,
   rebuildQueued: false,
   sending: false,
@@ -69,9 +75,18 @@ let videoUrl = null;
 async function api(path, { method = 'GET', json, body } = {}) {
   const headers = { 'x-figuraudio': '1' };
   if (json) headers['content-type'] = 'application/json';
-  const response = await fetch(path, { method, headers, body: json ? JSON.stringify(json) : body });
+  let response;
+  try {
+    response = await fetch(path, { method, headers, body: json ? JSON.stringify(json) : body });
+  } catch {
+    throw new Error('Sem resposta do Figuráudio. Ele ainda está aberto?');
+  }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `Erro ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(data.error || `Erro ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 
@@ -125,7 +140,7 @@ async function refreshStatus() {
   try {
     const status = await api('/api/status');
     state.whatsapp = status.whatsapp;
-    if (!status.ffmpeg) showBanner('FFmpeg não foi encontrado neste computador. Instale e abra o Figuráudio de novo (passo 1 do README).');
+    if (!status.ffmpeg) showBanner(status.ffmpegProblem || 'FFmpeg não foi encontrado. Veja o passo 1 do README.');
     else if (el.banner.dataset.kind === 'closed') showBanner('');
     el.banner.dataset.kind = status.ffmpeg ? '' : 'ffmpeg';
     renderWhatsApp();
@@ -198,7 +213,10 @@ document.addEventListener('drop', (event) => {
 async function loadVideo(file) {
   if (!file) return;
   el.fileInput.value = '';
-  if (state.building) return;
+  if (state.building || state.sending) {
+    showBanner('Aguarde a figurinha atual terminar e escolha o vídeo de novo.');
+    return;
+  }
   showBanner('');
   setStatus(el.stickerStatus, '');
   setStatus(el.sendStatus, '');
@@ -217,7 +235,9 @@ async function loadVideo(file) {
   }
 
   state.sticker = null;
+  state.stale = false;
   state.peaks = null;
+  const loadId = ++state.loadId;
   state.start = 0;
   state.length = Math.min(DEFAULT_SECONDS, state.video.maxSeconds, state.video.duration);
   if (videoUrl) URL.revokeObjectURL(videoUrl);
@@ -232,8 +252,10 @@ async function loadVideo(file) {
   renderSticker();
   build();
 
-  if (state.video.hasAudio) {
+  if (state.video.hasAudio && state.video.duration <= MAX_WAVEFORM_SECONDS) {
     const { peaks } = await readWaveform(file);
+    // Another video may have been chosen while this one was decoding.
+    if (loadId !== state.loadId) return;
     state.peaks = peaks;
     drawWave();
   }
@@ -256,7 +278,7 @@ function setTrim(start, length, { rebuild = true } = {}) {
   state.length = next.length;
   renderTrim();
   if (!el.video.paused) el.video.currentTime = state.start;
-  if (rebuild) scheduleBuild();
+  if (rebuild) markStale();
 }
 
 function renderTrim() {
@@ -360,7 +382,7 @@ el.duration.addEventListener('blur', renderTrim);
 for (const radio of document.querySelectorAll('input[name="fit"]')) {
   radio.addEventListener('change', () => {
     renderTrim();
-    scheduleBuild();
+    markStale();
   });
 }
 
@@ -395,9 +417,16 @@ requestAnimationFrame(trackPlayhead);
 
 // ---------- Building the sticker ----------
 
-function scheduleBuild() {
+// The sticker no longer matches the controls: block sending until rebuilt.
+function markStale() {
+  if (state.sticker) state.stale = true;
+  renderSend();
+  scheduleBuild();
+}
+
+function scheduleBuild(delay = REBUILD_DELAY_MS) {
   clearTimeout(rebuildTimer);
-  rebuildTimer = setTimeout(build, REBUILD_DELAY_MS);
+  rebuildTimer = setTimeout(build, delay);
 }
 
 async function build() {
@@ -414,6 +443,7 @@ async function build() {
       method: 'POST',
       json: { start: state.start, duration: state.length, fit: fit() },
     });
+    state.stale = false;
     const version = Date.now();
     el.stickerImage.src = `/api/arquivo/figurinha.webp?v=${version}`;
     el.stickerAudio.src = state.sticker.audioSeconds ? `/api/arquivo/som.ogg?v=${version}` : '';
@@ -421,8 +451,13 @@ async function build() {
       ? 'Toque na figurinha para ouvir.'
       : 'Esse vídeo não tem som. Dá para baixar a figurinha, mas ela sai muda.');
   } catch (error) {
-    state.sticker = null;
-    setStatus(el.stickerStatus, error.message, 'error');
+    if (error.status === 409) {
+      // The server is still busy (sending, for example): try again shortly.
+      scheduleBuild(BUSY_RETRY_MS);
+    } else {
+      state.sticker = null;
+      setStatus(el.stickerStatus, error.message, 'error');
+    }
   } finally {
     state.building = false;
     renderSticker();
@@ -459,7 +494,7 @@ el.play.addEventListener('click', () => {
 
 function renderSend() {
   const connected = state.whatsapp.state === 'open';
-  const ready = Boolean(state.sticker?.audioSeconds) && !state.building;
+  const ready = Boolean(state.sticker?.audioSeconds) && !state.building && !state.stale;
   if (!connected) {
     const labels = { off: 'Conectar o WhatsApp', qr: 'Mostrar o QR Code', connecting: 'Conectando…' };
     el.send.textContent = labels[state.whatsapp.state];

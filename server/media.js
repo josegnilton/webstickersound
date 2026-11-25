@@ -2,7 +2,7 @@
 // steps in recipe.js.
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { ffmpeg, probe } from './ffmpeg.js';
+import { ffmpeg, FfmpegError, probe } from './ffmpeg.js';
 import {
   audioArgs,
   clampTrim,
@@ -19,8 +19,9 @@ export async function buildSticker({ input, workDir, totalSeconds, hasAudio, sta
   const audio = path.join(workDir, 'som.ogg');
   await fs.rm(audio, { force: true });
 
-  await ffmpeg(clipArgs({ input, output: clip, ...trim, fit: fit === 'contain' ? 'contain' : 'cover' }));
   try {
+    await ffmpeg(clipArgs({ input, output: clip, ...trim, fit: fit === 'contain' ? 'contain' : 'cover' }));
+
     let kb = Infinity;
     for (const step of STICKER_STEPS) {
       await ffmpeg(stickerArgs({ input: clip, output: sticker, ...step }));
@@ -28,7 +29,7 @@ export async function buildSticker({ input, workDir, totalSeconds, hasAudio, sta
       if (kb <= STICKER_LIMIT_KB) break;
     }
     if (kb > STICKER_LIMIT_KB) {
-      throw new Error('A figurinha passou de 500 KB mesmo na qualidade mínima. Escolha um trecho mais curto.');
+      throw new FfmpegError('A figurinha passou de 500 KB mesmo na qualidade mínima. Escolha um trecho mais curto.', 422);
     }
 
     let audioSeconds = 0;

@@ -18,6 +18,14 @@ export const STICKER_STEPS = [
 
 const CLIP_FPS = 24;
 
+// Read the uploaded file only as a local video container. Stops FFmpeg from
+// treating a crafted file as a playlist or concat list that opens other
+// files or URLs.
+export const UPLOAD_INPUT_GUARD = [
+  '-protocol_whitelist', 'file',
+  '-format_whitelist', 'mov,matroska,avi',
+];
+
 export function clampTrim(start, duration, total) {
   const length = Number.isFinite(total) && total > 0 ? total : MAX_SECONDS;
   const from = Math.min(Math.max(0, Number(start) || 0), Math.max(0, length - MIN_SECONDS));
@@ -41,8 +49,10 @@ function frameFilter(fit) {
 // alpha, and keep the sound uncompressed, so the next steps read a small file.
 export function clipArgs({ input, output, start, duration, fit }) {
   return [
+    ...UPLOAD_INPUT_GUARD,
     '-ss', String(start), '-t', String(duration), '-i', input,
-    '-map', '0:v:0', '-map', '0:a:0?',
+    // Capital V skips cover art stored as a video stream.
+    '-map', '0:V:0', '-map', '0:a:0?',
     '-vf', `fps=${CLIP_FPS},${frameFilter(fit)}`,
     '-c:v', 'png', '-c:a', 'pcm_s16le', '-ar', '48000',
     output,
