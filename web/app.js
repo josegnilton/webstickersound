@@ -27,6 +27,7 @@ const el = {
   start: $('start'),
   duration: $('duration'),
   listen: $('listen-button'),
+  listenLabel: $('listen-label'),
   square: $('square'),
   squareEmpty: $('square-empty'),
   stickerImage: $('sticker-image'),
@@ -218,6 +219,7 @@ el.disconnect.addEventListener('click', async () => {
 const MODES = {
   video: { source: 'video', note: 'Figurinha animada com o som do próprio vídeo.' },
   'video-audio': { source: 'video', note: 'Figurinha animada com o som de outro arquivo: música, áudio ou outro vídeo.' },
+  mudo: { source: 'video', note: 'Figurinha animada sem som. O som do vídeo é retirado.' },
   foto: { source: 'photo', note: 'Figurinha parada, sem som.' },
 };
 const SOURCES = {
@@ -246,7 +248,11 @@ function setMode(mode) {
   const previous = state.mode;
   state.mode = mode;
   document.body.dataset.mode = mode;
-  document.querySelector(`input[name="mode"][value="${mode}"]`).checked = true;
+  // "Vídeo com som" covers two modes: the video's own sound or another one.
+  const withSound = mode === 'video' || mode === 'video-audio';
+  document.querySelector(`input[name="kind"][value="${withSound ? 'com-som' : mode}"]`).checked = true;
+  if (withSound) document.querySelector(`input[name="sound-source"][value="${mode}"]`).checked = true;
+  el.listenLabel.textContent = mode === 'mudo' ? 'Ver trecho' : 'Ouvir trecho';
   el.modeNote.textContent = MODES[mode].note;
   const source = SOURCES[MODES[mode].source];
   el.sourceTitle.textContent = source.title;
@@ -282,7 +288,12 @@ function clearSource() {
   setStatus(el.sendStatus, '');
 }
 
-for (const radio of document.querySelectorAll('input[name="mode"]')) {
+const soundSource = () => document.querySelector('input[name="sound-source"]:checked').value;
+
+for (const radio of document.querySelectorAll('input[name="kind"]')) {
+  radio.addEventListener('change', () => setMode(radio.value === 'com-som' ? soundSource() : radio.value));
+}
+for (const radio of document.querySelectorAll('input[name="sound-source"]')) {
   radio.addEventListener('change', () => setMode(radio.value));
 }
 
@@ -564,7 +575,7 @@ function pausePreview() {
   el.listen.setAttribute('aria-pressed', 'false');
 }
 
-// In "Vídeo + áudio" the video plays muted and the chosen sound plays along.
+// With "Outro áudio" the video plays muted and the chosen sound plays along.
 const usesTrack = () => state.mode === 'video-audio';
 
 function restartPreview() {
@@ -574,7 +585,7 @@ function restartPreview() {
 
 el.listen.addEventListener('click', () => {
   if (!el.video.paused) return pausePreview();
-  el.video.muted = usesTrack();
+  el.video.muted = usesTrack() || state.mode === 'mudo';
   restartPreview();
   el.video.play();
   if (usesTrack() && state.track) el.soundAudio.play();
@@ -791,8 +802,9 @@ async function build() {
 
 function stickerNote(sticker) {
   if (sticker.mode === 'foto') return 'Figurinha parada, sem som.';
+  if (sticker.mode === 'mudo') return 'Figurinha animada, sem som.';
   if (sticker.audioSeconds) return 'Toque na figurinha para ouvir.';
-  return 'Esse vídeo não tem som: ela vai como figurinha animada muda. Para pôr som, use Vídeo + áudio.';
+  return 'Esse vídeo não tem som: ela vai como figurinha animada muda. Para pôr som, escolha Outro áudio.';
 }
 
 function renderSticker() {

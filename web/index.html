@@ -23,9 +23,9 @@
 
   <div class="modes">
     <div class="segmented" role="radiogroup" aria-label="Tipo de figurinha">
-      <label><input type="radio" name="mode" value="video" checked><span>Vídeo</span></label>
-      <label><input type="radio" name="mode" value="video-audio"><span>Vídeo + áudio</span></label>
-      <label><input type="radio" name="mode" value="foto"><span>Foto</span></label>
+      <label><input type="radio" name="kind" value="com-som" checked><span>Vídeo com som</span></label>
+      <label><input type="radio" name="kind" value="mudo"><span>Vídeo sem som</span></label>
+      <label><input type="radio" name="kind" value="foto"><span>Foto</span></label>
     </div>
     <p class="mode-note" id="mode-note">Figurinha animada com o som do próprio vídeo.</p>
   </div>
@@ -86,19 +86,25 @@
           <button class="btn secondary listen video-only" type="button" id="listen-button" aria-pressed="false">
             <svg class="icon-play" width="14" height="14" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.5l11 6.5-11 6.5z" fill="currentColor"/></svg>
             <svg class="icon-pause" width="14" height="14" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3h3.5v14H5zM11.5 3H15v14h-3.5z" fill="currentColor"/></svg>
-            <span>Ouvir trecho</span>
+            <span id="listen-label">Ouvir trecho</span>
           </button>
         </div>
         <p class="hint video-only">Até 10 segundos. Arraste a seleção ou toque na barra onde quer começar. Para um ajuste fino, digite o início.</p>
 
         <div class="sound">
           <input class="visually-hidden" type="file" id="sound-input" accept="audio/*,video/*,.mp3,.m4a,.aac,.ogg,.opus,.wav,.flac,.mkv,.mov,.webm">
-          <div class="sound-row">
-            <span class="field-label">Áudio</span>
+          <div class="field">
+            <span class="field-label" id="sound-source-label">Som</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="sound-source-label">
+              <label><input type="radio" name="sound-source" value="video" checked><span>Do próprio vídeo</span></label>
+              <label><input type="radio" name="sound-source" value="video-audio"><span>Outro áudio</span></label>
+            </div>
+          </div>
+          <div class="sound-row track-only">
             <span class="sound-name" id="sound-name">Nenhum áudio escolhido</span>
             <button class="btn secondary" type="button" id="sound-choose">Escolher áudio</button>
           </div>
-          <div class="sound-editor" id="sound-editor" hidden>
+          <div class="sound-editor track-only" id="sound-editor" hidden>
             <div class="timeline sound-timeline" id="sound-timeline" aria-hidden="true">
               <canvas id="sound-wave"></canvas>
               <div class="dim" id="sound-dim-left"></div>

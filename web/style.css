@@ -77,9 +77,12 @@ a { color: inherit; text-underline-offset: 3px; }
 .modes .segmented input:checked + span { background: var(--ink); color: #fff; box-shadow: none; }
 .mode-note { margin: 0; font-size: 14px; color: var(--ink-3); }
 
-/* Photo: no trim, no sound. Separate sound only in "Vídeo + áudio". */
+/* Photo: no trim, no sound. The sound choice only for "Vídeo com som", and
+   the separate sound only when "Outro áudio" is picked. */
 body[data-mode="foto"] .video-only { display: none !important; }
-body:not([data-mode="video-audio"]) .sound { display: none; }
+body:not([data-mode="video"]):not([data-mode="video-audio"]) .sound { display: none; }
+body:not([data-mode="video-audio"]) .track-only { display: none !important; }
+.sound .field + .track-only { margin-top: 12px; }
 
 /* ---------- Layout ---------- */
 

@@ -274,10 +274,11 @@ async function handleAudioUpload(req, url) {
   });
 }
 
-const MODES = new Set(['video', 'video-audio', 'foto']);
+const MODES = new Set(['video', 'video-audio', 'mudo', 'foto']);
 
 // mode: 'video' (the video's own sound), 'video-audio' (a separate sound in
-// place of the video's) or 'foto' (a still sticker without sound).
+// place of the video's), 'mudo' (the video without sound) or 'foto' (a still
+// sticker without sound).
 async function handleBuild(req) {
   const { mode = 'video', start, duration, fit, audioStart } = await readJson(req);
   if (!MODES.has(mode)) throw new HttpError(400, 'Pedido inválido.');
@@ -299,7 +300,8 @@ async function handleBuild(req) {
       input: video.file,
       workDir: WORK_DIR,
       totalSeconds: video.duration,
-      hasAudio: video.hasAudio,
+      // "Vídeo sem som" drops the video's sound: it goes as a plain animated sticker.
+      hasAudio: mode === 'mudo' ? false : video.hasAudio,
       start,
       duration,
       fit,

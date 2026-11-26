@@ -110,15 +110,15 @@ No topo da página, escolha o tipo de figurinha:
 
 | Tipo | O que faz |
 | --- | --- |
-| **Vídeo** | Figurinha animada com o som do próprio vídeo. Se o vídeo não tiver som, ela vai como figurinha animada muda. |
-| **Vídeo + áudio** | Figurinha animada com o som de outro arquivo (MP3, M4A, AAC, OGG, Opus, WAV, FLAC ou outro vídeo) no lugar do som do vídeo. |
+| **Vídeo com som** | Figurinha animada com som. Em **Som**, escolha **Do próprio vídeo** ou **Outro áudio** (MP3, M4A, AAC, OGG, Opus, WAV, FLAC ou outro vídeo), que toca no lugar do som do vídeo. |
+| **Vídeo sem som** | Figurinha animada muda. Se o vídeo tiver som, ele é retirado. |
 | **Foto** | Figurinha comum, parada e sem som (JPG, PNG, WebP, GIF ou BMP). |
 
 Depois:
 
-1. **Escolha o arquivo**: clique em **Escolher vídeo** (ou **Escolher foto**) ou arraste o arquivo para a página. Arrastar já escolhe o tipo: uma foto vai para **Foto**, e um vídeo junto com um áudio vai para **Vídeo + áudio**.
+1. **Escolha o arquivo**: clique em **Escolher vídeo** (ou **Escolher foto**) ou arraste o arquivo para a página. Arrastar já escolhe o tipo: uma foto vai para **Foto**, e um vídeo junto com um áudio vai para **Vídeo com som** com **Outro áudio**.
 2. **Escolha o trecho** (vídeo): arraste a seleção na barra (até 10 segundos) ou digite o início e a duração. **Ouvir trecho** toca o pedaço escolhido.
-3. **Escolha o áudio** (Vídeo + áudio): clique em **Escolher áudio** e arraste a seleção na barra do áudio para escolher a parte que toca.
+3. **Escolha o áudio** (só com **Outro áudio**): clique em **Escolher áudio** e arraste a seleção na barra do áudio para escolher a parte que toca.
 4. **Enquadramento**: **Preencher** corta num quadrado; **Mostrar tudo** mostra a imagem inteira com bordas transparentes.
 5. **Confira**: a figurinha aparece à direita. Se tiver som, toque nela para ouvir.
 6. **Envie**: clique em **Enviar para o meu WhatsApp**.
@@ -138,7 +138,7 @@ Também dá para baixar a figurinha (`.webp`) e o som (`.ogg`) separados pelos l
 | **`npm ci` falha dizendo que precisa do Node.js 20** | Seu Node.js é antigo. Instale a versão LTS em [nodejs.org](https://nodejs.org). |
 | **O celular diz "sem conexão" ao ler o QR Code** | Confira a internet do computador e do celular, clique em **Gerar novo QR Code** e leia o código novo. |
 | **"A porta 4827 já está em uso"** | O Figuráudio já está aberto em outra janela. Use `http://127.0.0.1:4827` ou feche a outra janela. Para usar outra porta: `PORT=5000 npm start` (no PowerShell: `$env:PORT=5000; npm start`). |
-| **"Esse vídeo não tem som"** | O vídeo não tem faixa de áudio. Ele vai como figurinha muda; para colocar um som, use **Vídeo + áudio**. |
+| **"Esse vídeo não tem som"** | O vídeo não tem faixa de áudio. Ele vai como figurinha muda; para colocar um som, escolha **Outro áudio**. |
 | **"A figurinha passou de 500 KB"** | O WhatsApp limita figurinhas animadas a 500 KB. Escolha um trecho mais curto. |
 | **"A figurinha passou de 100 KB"** | O WhatsApp limita figurinhas paradas a 100 KB. Tente outra foto. |
 | **A figurinha chegou, mas quem recebeu não ouve o som** | A figurinha com som é um recurso novo do WhatsApp, liberado aos poucos. Quem recebe precisa ter o WhatsApp atualizado. |
