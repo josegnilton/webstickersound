@@ -21,22 +21,32 @@
     </p>
   </header>
 
+  <div class="modes">
+    <div class="segmented" role="radiogroup" aria-label="Tipo de figurinha">
+      <label><input type="radio" name="mode" value="video" checked><span>Vídeo</span></label>
+      <label><input type="radio" name="mode" value="video-audio"><span>Vídeo + áudio</span></label>
+      <label><input type="radio" name="mode" value="foto"><span>Foto</span></label>
+    </div>
+    <p class="mode-note" id="mode-note">Figurinha animada com o som do próprio vídeo.</p>
+  </div>
+
   <p class="banner" id="banner" role="alert" hidden></p>
 
   <main class="layout">
     <section class="panel" aria-labelledby="video-title">
-      <h1 id="video-title" class="panel-title"><span class="step" aria-hidden="true">1</span>Escolha o vídeo</h1>
+      <h1 id="video-title" class="panel-title"><span class="step" aria-hidden="true">1</span><span id="source-title">Escolha o vídeo</span></h1>
 
       <div class="drop" id="drop">
         <input class="visually-hidden" type="file" id="file-input" accept="video/*,.mkv,.mov,.m4v,.webm,.avi,.3gp">
         <button class="btn primary" type="button" id="choose-button">Escolher vídeo</button>
         <p class="drop-hint">ou arraste o arquivo para cá</p>
-        <p class="drop-formats">MP4, MOV, WebM, MKV ou AVI, até 500 MB</p>
+        <p class="drop-formats" id="drop-formats">MP4, MOV, WebM, MKV ou AVI, até 500 MB</p>
       </div>
 
       <div class="editor" id="editor" hidden>
         <div class="stage">
           <video id="video" playsinline preload="auto"></video>
+          <img id="photo" alt="Foto escolhida" hidden>
           <div class="frame-guide" id="frame-guide" aria-hidden="true"></div>
         </div>
 
@@ -45,7 +55,7 @@
           <button class="link" type="button" id="replace-button">Trocar vídeo</button>
         </div>
 
-        <div class="timeline" id="timeline" aria-hidden="true">
+        <div class="timeline video-only" id="timeline" aria-hidden="true">
           <canvas id="wave"></canvas>
           <div class="dim" id="dim-left"></div>
           <div class="dim" id="dim-right"></div>
@@ -55,14 +65,14 @@
           </div>
           <div class="playhead" id="playhead"></div>
         </div>
-        <div class="ticks" id="ticks" aria-hidden="true"></div>
+        <div class="ticks video-only" id="ticks" aria-hidden="true"></div>
 
         <div class="controls">
-          <div class="field">
+          <div class="field video-only">
             <label for="start">Início (s)</label>
             <input id="start" type="number" inputmode="decimal" min="0" step="0.1" value="0">
           </div>
-          <div class="field">
+          <div class="field video-only">
             <label for="duration">Duração (s)</label>
             <input id="duration" type="number" inputmode="decimal" min="0.5" max="10" step="0.1" value="5">
           </div>
@@ -73,21 +83,20 @@
               <label><input type="radio" name="fit" value="contain"><span>Mostrar tudo</span></label>
             </div>
           </div>
-          <button class="btn secondary listen" type="button" id="listen-button" aria-pressed="false">
+          <button class="btn secondary listen video-only" type="button" id="listen-button" aria-pressed="false">
             <svg class="icon-play" width="14" height="14" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.5l11 6.5-11 6.5z" fill="currentColor"/></svg>
             <svg class="icon-pause" width="14" height="14" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3h3.5v14H5zM11.5 3H15v14h-3.5z" fill="currentColor"/></svg>
             <span>Ouvir trecho</span>
           </button>
         </div>
-        <p class="hint">Até 10 segundos. Arraste a seleção ou toque na barra onde quer começar. Para um ajuste fino, digite o início.</p>
+        <p class="hint video-only">Até 10 segundos. Arraste a seleção ou toque na barra onde quer começar. Para um ajuste fino, digite o início.</p>
 
         <div class="sound">
           <input class="visually-hidden" type="file" id="sound-input" accept="audio/*,video/*,.mp3,.m4a,.aac,.ogg,.opus,.wav,.flac,.mkv,.mov,.webm">
           <div class="sound-row">
-            <span class="field-label">Som</span>
-            <span class="sound-name" id="sound-name">O do próprio vídeo</span>
-            <button class="link" type="button" id="sound-choose">Usar outro áudio</button>
-            <button class="link" type="button" id="sound-remove" hidden>Voltar ao som do vídeo</button>
+            <span class="field-label">Áudio</span>
+            <span class="sound-name" id="sound-name">Nenhum áudio escolhido</span>
+            <button class="btn secondary" type="button" id="sound-choose">Escolher áudio</button>
           </div>
           <div class="sound-editor" id="sound-editor" hidden>
             <div class="timeline sound-timeline" id="sound-timeline" aria-hidden="true">

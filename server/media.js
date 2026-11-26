@@ -7,10 +7,26 @@ import {
   audioArgs,
   clampTrim,
   clipArgs,
+  PHOTO_LIMIT_KB,
+  PHOTO_QUALITIES,
+  photoArgs,
   STICKER_LIMIT_KB,
   STICKER_STEPS,
   stickerArgs,
 } from './recipe.js';
+
+// Still sticker from a photo, without sound.
+export async function buildPhotoSticker({ input, workDir, fit }) {
+  const sticker = path.join(workDir, 'figurinha.webp');
+  await fs.rm(path.join(workDir, 'som.ogg'), { force: true });
+  let kb = Infinity;
+  for (const quality of PHOTO_QUALITIES) {
+    await ffmpeg(photoArgs({ input, output: sticker, fit: fit === 'contain' ? 'contain' : 'cover', quality }));
+    kb = Math.ceil((await fs.stat(sticker)).size / 1024);
+    if (kb <= PHOTO_LIMIT_KB) return { kb };
+  }
+  throw new FfmpegError('A figurinha passou de 100 KB mesmo na qualidade mínima. Tente outra foto.', 422);
+}
 
 // soundTrack: optional separate sound { file, start } that replaces the video's own.
 export async function buildSticker({ input, workDir, totalSeconds, hasAudio, start, duration, fit, soundTrack }) {

@@ -9,8 +9,8 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { hasFfmpeg, INSTALL_HINT, missingEncoders, probe } from './ffmpeg.js';
-import { buildSticker } from './media.js';
-import { AUDIO_INPUT_GUARD, clampAudioStart, MAX_SECONDS, UPLOAD_INPUT_GUARD } from './recipe.js';
+import { buildPhotoSticker, buildSticker } from './media.js';
+import { AUDIO_INPUT_GUARD, clampAudioStart, MAX_SECONDS, PHOTO_INPUT_GUARD, UPLOAD_INPUT_GUARD } from './recipe.js';
 import { withPackMetadata } from './webp.js';
 import { createWhatsApp } from './whatsapp.js';
 
@@ -22,6 +22,7 @@ const PORT = Number(process.env.PORT) || 4827;
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 const MAX_JSON_BYTES = 16 * 1024;
 const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi', '3gp']);
+const PHOTO_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp']);
 // A separate sound can also come from another video.
 const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'wav', 'flac', ...VIDEO_EXTENSIONS]);
 // The separate sound keeps this name in data/work, so a new video does not erase it.
@@ -58,9 +59,10 @@ process.on('unhandledRejection', (error) => console.error('Erro inesperado:', er
 const whatsapp = createWhatsApp({ dataDir: DATA_DIR });
 
 // One video at a time: what was uploaded and the sticker made from it.
-let video = null; // { file, duration, hasAudio }
+// The chosen video or photo.
+let video = null; // { kind: 'video', file, duration, hasAudio } or { kind: 'photo', file }
 let track = null; // separate sound: { file, duration }
-let sticker = null; // { start, duration, kb, audioSeconds }
+let sticker = null; // { mode, kb, audioSeconds, start, duration, audioStart }
 let busy = false;
 
 class HttpError extends Error {
@@ -180,13 +182,30 @@ async function clearWork({ keepTrack }) {
   }
 }
 
-async function handleUpload(req, url) {
+// What each kind of upload accepts and how it is read.
+const UPLOADS = {
+  video: {
+    extensions: VIDEO_EXTENSIONS,
+    refused: 'Formato não aceito. Use um vídeo MP4, MOV, M4V, WebM, MKV, AVI ou 3GP.',
+    tooLarge: 'Vídeo maior que 500 MB.',
+    unreadable: 'Não consegui ler esse arquivo como vídeo.',
+    guard: UPLOAD_INPUT_GUARD,
+  },
+  photo: {
+    extensions: PHOTO_EXTENSIONS,
+    refused: 'Formato não aceito. Use uma foto JPG, PNG, WebP, GIF ou BMP.',
+    tooLarge: 'Foto maior que 500 MB.',
+    unreadable: 'Não consegui ler esse arquivo como foto.',
+    guard: PHOTO_INPUT_GUARD,
+  },
+};
+
+async function handleUpload(req, url, kind) {
   requireFfmpeg();
+  const rules = UPLOADS[kind];
   const extension = extensionOf(url);
-  if (!VIDEO_EXTENSIONS.has(extension)) {
-    throw new HttpError(400, 'Formato não aceito. Use um vídeo MP4, MOV, M4V, WebM, MKV, AVI ou 3GP.');
-  }
-  if (Number(req.headers['content-length']) > MAX_UPLOAD_BYTES) throw new HttpError(413, 'Vídeo maior que 500 MB.');
+  if (!rules.extensions.has(extension)) throw new HttpError(400, rules.refused);
+  if (Number(req.headers['content-length']) > MAX_UPLOAD_BYTES) throw new HttpError(413, rules.tooLarge);
 
   return exclusive(async () => {
     video = null;
@@ -194,18 +213,23 @@ async function handleUpload(req, url) {
     // A separate sound chosen before stays, so the video can be swapped.
     await clearWork({ keepTrack: true });
 
-    const file = path.join(WORK_DIR, `video.${extension}`);
+    const file = path.join(WORK_DIR, `${kind === 'photo' ? 'foto' : 'video'}.${extension}`);
     await receive(req, file);
 
     let info;
     try {
-      info = await probe(file, { inputGuard: UPLOAD_INPUT_GUARD });
+      info = await probe(file, { inputGuard: rules.guard });
     } catch {
-      throw new HttpError(400, 'Não consegui ler esse arquivo como vídeo.');
+      throw new HttpError(400, rules.unreadable);
+    }
+    if (kind === 'photo') {
+      if (!info.hasVideo || !info.width) throw new HttpError(400, 'Esse arquivo não é uma foto.');
+      video = { kind, file };
+      return { kind };
     }
     if (!info.hasVideo || !info.animated) throw new HttpError(400, 'Esse arquivo não é um vídeo.');
-    video = { file, duration: info.duration, hasAudio: info.hasAudio };
-    return { duration: info.duration, hasAudio: info.hasAudio, maxSeconds: MAX_SECONDS };
+    video = { kind, file, duration: info.duration, hasAudio: info.hasAudio };
+    return { kind, duration: info.duration, hasAudio: info.hasAudio, maxSeconds: MAX_SECONDS };
   });
 }
 
@@ -250,13 +274,28 @@ async function handleAudioUpload(req, url) {
   });
 }
 
+const MODES = new Set(['video', 'video-audio', 'foto']);
+
+// mode: 'video' (the video's own sound), 'video-audio' (a separate sound in
+// place of the video's) or 'foto' (a still sticker without sound).
 async function handleBuild(req) {
-  const { start, duration, fit, audioStart } = await readJson(req);
-  if (!video) throw new HttpError(400, 'Escolha um vídeo primeiro.');
+  const { mode = 'video', start, duration, fit, audioStart } = await readJson(req);
+  if (!MODES.has(mode)) throw new HttpError(400, 'Pedido inválido.');
+  const wantsPhoto = mode === 'foto';
+  if (!video || (video.kind === 'photo') !== wantsPhoto) {
+    throw new HttpError(400, wantsPhoto ? 'Escolha uma foto primeiro.' : 'Escolha um vídeo primeiro.');
+  }
+  if (mode === 'video-audio' && !track) throw new HttpError(400, 'Escolha o áudio primeiro.');
+
   return exclusive(async () => {
     sticker = null;
-    const audio = track ? { file: track.file, start: clampAudioStart(audioStart, track.duration) } : null;
-    sticker = await buildSticker({
+    if (wantsPhoto) {
+      const { kb } = await buildPhotoSticker({ input: video.file, workDir: WORK_DIR, fit });
+      sticker = { mode, kb, audioSeconds: 0 };
+      return sticker;
+    }
+    const audio = mode === 'video-audio' ? { file: track.file, start: clampAudioStart(audioStart, track.duration) } : null;
+    const built = await buildSticker({
       input: video.file,
       workDir: WORK_DIR,
       totalSeconds: video.duration,
@@ -266,7 +305,7 @@ async function handleBuild(req) {
       fit,
       soundTrack: audio,
     });
-    sticker = { ...sticker, audioStart: audio ? audio.start : null };
+    sticker = { mode, ...built, audioStart: audio ? audio.start : null };
     return sticker;
   });
 }
@@ -274,13 +313,18 @@ async function handleBuild(req) {
 async function handleSend(req) {
   const { packName, author } = await readJson(req);
   if (!sticker) throw new HttpError(400, 'Crie a figurinha primeiro.');
-  if (!sticker.audioSeconds) throw new HttpError(400, 'Esse vídeo não tem som. Escolha um áudio separado.');
   if (whatsapp.getStatus().state !== 'open') throw new HttpError(409, 'Conecte o WhatsApp antes de enviar.');
   return exclusive(async () => {
     const clean = (value) => String(value || '').trim().slice(0, 60) || 'Figuráudio';
     const webp = withPackMetadata(await fsp.readFile(path.join(WORK_DIR, 'figurinha.webp')), clean(packName), clean(author));
-    const audio = await fsp.readFile(path.join(WORK_DIR, 'som.ogg'));
-    return whatsapp.sendSoundSticker({ sticker: webp, audio, seconds: Math.ceil(sticker.audioSeconds) });
+    // A video without sound goes as a plain animated sticker.
+    const audio = sticker.audioSeconds ? await fsp.readFile(path.join(WORK_DIR, 'som.ogg')) : null;
+    return whatsapp.sendSticker({
+      sticker: webp,
+      animated: sticker.mode !== 'foto',
+      audio,
+      seconds: Math.ceil(sticker.audioSeconds),
+    });
   });
 }
 
@@ -314,12 +358,11 @@ async function route(req, res) {
         whatsapp: whatsapp.getStatus(),
       });
     case 'POST /api/video':
-      return sendJson(res, 200, await handleUpload(req, url));
+      return sendJson(res, 200, await handleUpload(req, url, 'video'));
+    case 'POST /api/foto':
+      return sendJson(res, 200, await handleUpload(req, url, 'photo'));
     case 'POST /api/audio':
       return sendJson(res, 200, await handleAudioUpload(req, url));
-    case 'POST /api/audio/remover':
-      await exclusive(removeTrack);
-      return sendJson(res, 200, {});
     case 'POST /api/figurinha':
       return sendJson(res, 200, await handleBuild(req));
     case 'POST /api/enviar':

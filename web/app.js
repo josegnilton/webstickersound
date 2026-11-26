@@ -3,6 +3,10 @@ import { readWaveform } from './js/waveform.js';
 const $ = (id) => document.getElementById(id);
 const el = {
   banner: $('banner'),
+  modeNote: $('mode-note'),
+  sourceTitle: $('source-title'),
+  dropFormats: $('drop-formats'),
+  photo: $('photo'),
   waStatus: $('wa-status'),
   waStatusText: $('wa-status-text'),
   drop: $('drop'),
@@ -46,7 +50,6 @@ const el = {
   soundInput: $('sound-input'),
   soundName: $('sound-name'),
   soundChoose: $('sound-choose'),
-  soundRemove: $('sound-remove'),
   soundEditor: $('sound-editor'),
   soundTimeline: $('sound-timeline'),
   soundWave: $('sound-wave'),
@@ -71,7 +74,8 @@ const STATUS_INTERVAL_MS = 1500;
 
 const state = {
   whatsapp: { state: 'off' },
-  video: null, // { duration, hasAudio, maxSeconds }
+  mode: 'video', // 'video', 'video-audio' or 'foto'
+  video: null, // the chosen file: { kind: 'video', duration, hasAudio, maxSeconds } or { kind: 'photo' }
   peaks: null,
   start: 0,
   length: DEFAULT_SECONDS,
@@ -87,6 +91,7 @@ const state = {
 };
 let rebuildTimer = null;
 let videoUrl = null;
+let photoUrl = null;
 let trackUrl = null;
 let trackLoadId = 0;
 
@@ -208,11 +213,84 @@ el.disconnect.addEventListener('click', async () => {
   }
 });
 
-// ---------- Choosing the video ----------
+// ---------- Kind of sticker ----------
+
+const MODES = {
+  video: { source: 'video', note: 'Figurinha animada com o som do próprio vídeo.' },
+  'video-audio': { source: 'video', note: 'Figurinha animada com o som de outro arquivo: música, áudio ou outro vídeo.' },
+  foto: { source: 'photo', note: 'Figurinha parada, sem som.' },
+};
+const SOURCES = {
+  video: {
+    title: 'Escolha o vídeo',
+    choose: 'Escolher vídeo',
+    replace: 'Trocar vídeo',
+    loading: 'Carregando o vídeo…',
+    formats: 'MP4, MOV, WebM, MKV ou AVI, até 500 MB',
+    accept: 'video/*,.mkv,.mov,.m4v,.webm,.avi,.3gp',
+    endpoint: '/api/video',
+  },
+  photo: {
+    title: 'Escolha a foto',
+    choose: 'Escolher foto',
+    replace: 'Trocar foto',
+    loading: 'Carregando a foto…',
+    formats: 'JPG, PNG, WebP, GIF ou BMP',
+    accept: 'image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp',
+    endpoint: '/api/foto',
+  },
+};
+const isPhoto = () => state.video?.kind === 'photo';
+
+function setMode(mode) {
+  const previous = state.mode;
+  state.mode = mode;
+  document.body.dataset.mode = mode;
+  document.querySelector(`input[name="mode"][value="${mode}"]`).checked = true;
+  el.modeNote.textContent = MODES[mode].note;
+  const source = SOURCES[MODES[mode].source];
+  el.sourceTitle.textContent = source.title;
+  el.choose.textContent = source.choose;
+  el.replace.textContent = source.replace;
+  el.dropFormats.textContent = source.formats;
+  el.fileInput.accept = source.accept;
+  pausePreview();
+  if (MODES[previous].source !== MODES[mode].source) {
+    clearSource();
+  } else if (previous !== mode && state.video) {
+    // Same video, other sound: make the sticker again.
+    markStale();
+  }
+  renderSound();
+  renderSticker();
+}
+
+// Back to the empty drop area, when switching between video and photo.
+function clearSource() {
+  clearTimeout(rebuildTimer);
+  state.loadId++;
+  state.video = null;
+  state.sticker = null;
+  state.stale = false;
+  state.peaks = null;
+  el.video.removeAttribute('src');
+  el.video.load();
+  el.photo.removeAttribute('src');
+  el.editor.hidden = true;
+  el.drop.hidden = false;
+  setStatus(el.stickerStatus, '');
+  setStatus(el.sendStatus, '');
+}
+
+for (const radio of document.querySelectorAll('input[name="mode"]')) {
+  radio.addEventListener('change', () => setMode(radio.value));
+}
+
+// ---------- Choosing the video or photo ----------
 
 el.choose.addEventListener('click', () => el.fileInput.click());
 el.replace.addEventListener('click', () => el.fileInput.click());
-el.fileInput.addEventListener('change', () => loadVideo(el.fileInput.files[0]));
+el.fileInput.addEventListener('change', () => loadSource(el.fileInput.files[0]));
 
 for (const type of ['dragenter', 'dragover']) {
   document.addEventListener(type, (event) => {
@@ -230,26 +308,38 @@ document.addEventListener('drop', (event) => {
 });
 
 const isAudioFile = (file) => file.type.startsWith('audio/') || /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)$/i.test(file.name);
+const isImageFile = (file) => file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp)$/i.test(file.name);
 
-// A video and a sound can be dropped together; a sound alone replaces the
-// sound of the video already chosen.
+// Picks the kind of sticker from what was dropped: a photo, a video, a video
+// with a sound, or a sound for the video already chosen.
 async function loadDropped(files) {
+  const image = files.find(isImageFile);
   const sound = files.find(isAudioFile);
-  const videoFile = files.find((file) => !isAudioFile(file));
-  if (videoFile) await loadVideo(videoFile);
+  const videoFile = files.find((file) => !isAudioFile(file) && !isImageFile(file));
+  if (image && !videoFile) {
+    if (state.mode !== 'foto') setMode('foto');
+    return loadSource(image);
+  }
+  if (videoFile) {
+    if (sound) setMode('video-audio');
+    else if (state.mode === 'foto') setMode('video');
+    await loadSource(videoFile);
+  }
   if (!sound) return;
-  if (!state.video) {
+  if (!state.video || isPhoto()) {
     showBanner('Escolha o vídeo primeiro. Depois traga o áudio.');
     return;
   }
+  if (state.mode !== 'video-audio') setMode('video-audio');
   loadTrack(sound);
 }
 
-async function loadVideo(file) {
+async function loadSource(file) {
   if (!file) return;
   el.fileInput.value = '';
+  const source = SOURCES[MODES[state.mode].source];
   if (state.building || state.sending) {
-    showBanner('Aguarde a figurinha atual terminar e escolha o vídeo de novo.');
+    showBanner('Aguarde a figurinha atual terminar e escolha o arquivo de novo.');
     return;
   }
   showBanner('');
@@ -258,29 +348,48 @@ async function loadVideo(file) {
   pausePreview();
 
   el.drop.classList.add('loading');
-  el.choose.textContent = 'Carregando o vídeo…';
+  el.choose.textContent = source.loading;
+  let loaded;
   try {
-    state.video = await api(`/api/video?nome=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
+    loaded = await api(`${source.endpoint}?nome=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
   } catch (error) {
     showBanner(error.message);
     return;
   } finally {
     el.drop.classList.remove('loading');
-    el.choose.textContent = 'Escolher vídeo';
+    el.choose.textContent = source.choose;
   }
+  // The kind of sticker may have changed while the file was uploading.
+  if (loaded.kind !== MODES[state.mode].source) return;
 
+  state.video = loaded;
   state.sticker = null;
   state.stale = false;
   state.peaks = null;
   const loadId = ++state.loadId;
+  el.fileName.textContent = file.name;
+  el.drop.hidden = true;
+  el.editor.hidden = false;
+
+  if (loaded.kind === 'photo') {
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
+    photoUrl = URL.createObjectURL(file);
+    el.photo.src = photoUrl;
+    el.photo.hidden = false;
+    el.video.hidden = true;
+    el.video.removeAttribute('src');
+    el.frameGuide.hidden = fit() !== 'cover';
+    renderSticker();
+    build();
+    return;
+  }
+  el.photo.hidden = true;
+  el.video.hidden = false;
   state.start = 0;
   state.length = Math.min(DEFAULT_SECONDS, state.video.maxSeconds, state.video.duration);
   if (videoUrl) URL.revokeObjectURL(videoUrl);
   videoUrl = URL.createObjectURL(file);
   el.video.src = videoUrl;
-  el.fileName.textContent = file.name;
-  el.drop.hidden = true;
-  el.editor.hidden = false;
   renderTrim();
   renderTicks();
   drawWave();
@@ -317,6 +426,10 @@ function setTrim(start, length, { rebuild = true } = {}) {
 }
 
 function renderTrim() {
+  if (isPhoto()) {
+    el.frameGuide.hidden = fit() !== 'cover';
+    return;
+  }
   const total = state.video.duration;
   const left = (state.start / total) * 100;
   const width = (state.length / total) * 100;
@@ -383,7 +496,7 @@ function drawBars(canvas, peaks) {
   }
 }
 window.addEventListener('resize', () => {
-  if (state.video) {
+  if (state.video && !isPhoto()) {
     drawWave();
     el.selection.classList.toggle('narrow', isNarrowSelection());
   }
@@ -392,7 +505,7 @@ window.addEventListener('resize', () => {
 
 // Pointer: drag the selection, either edge, or tap the bar to jump there.
 el.timeline.addEventListener('pointerdown', (event) => {
-  if (!state.video) return;
+  if (!state.video || isPhoto()) return;
   event.preventDefault();
   const rect = el.timeline.getBoundingClientRect();
   const toTime = (x) => ((x - rect.left) / rect.width) * state.video.duration;
@@ -451,18 +564,20 @@ function pausePreview() {
   el.listen.setAttribute('aria-pressed', 'false');
 }
 
-// With a separate sound, the video plays muted and the sound plays along.
+// In "Vídeo + áudio" the video plays muted and the chosen sound plays along.
+const usesTrack = () => state.mode === 'video-audio';
+
 function restartPreview() {
   el.video.currentTime = state.start;
-  if (state.track) el.soundAudio.currentTime = state.audioStart;
+  if (usesTrack() && state.track) el.soundAudio.currentTime = state.audioStart;
 }
 
 el.listen.addEventListener('click', () => {
   if (!el.video.paused) return pausePreview();
-  el.video.muted = Boolean(state.track);
+  el.video.muted = usesTrack();
   restartPreview();
   el.video.play();
-  if (state.track) el.soundAudio.play();
+  if (usesTrack() && state.track) el.soundAudio.play();
   el.listen.setAttribute('aria-pressed', 'true');
 });
 
@@ -533,34 +648,6 @@ async function loadTrack(file) {
   }
 }
 
-function clearTrack() {
-  trackLoadId++;
-  state.track = null;
-  state.trackPeaks = null;
-  state.audioStart = 0;
-  el.soundAudio.removeAttribute('src');
-  if (trackUrl) URL.revokeObjectURL(trackUrl);
-  trackUrl = null;
-  el.video.muted = false;
-  renderSound();
-}
-
-el.soundRemove.addEventListener('click', async () => {
-  if (state.building || state.sending) {
-    showBanner('Aguarde a figurinha atual terminar.');
-    return;
-  }
-  pausePreview();
-  try {
-    await api('/api/audio/remover', { method: 'POST' });
-  } catch (error) {
-    showBanner(error.message);
-    return;
-  }
-  clearTrack();
-  markStale();
-});
-
 // The window over the sound is as long as the piece of video.
 function soundWindow() {
   return Math.min(state.length, state.track.duration);
@@ -583,10 +670,9 @@ function setAudioStart(value) {
 function renderSound() {
   const { track } = state;
   el.soundEditor.hidden = !track;
-  el.soundRemove.hidden = !track;
-  el.soundChoose.textContent = track ? 'Trocar áudio' : 'Usar outro áudio';
+  el.soundChoose.textContent = track ? 'Trocar áudio' : 'Escolher áudio';
   if (!track) {
-    el.soundName.textContent = state.video && !state.video.hasAudio ? 'O vídeo não tem som' : 'O do próprio vídeo';
+    el.soundName.textContent = 'Nenhum áudio escolhido';
     return;
   }
   el.soundName.textContent = track.name;
@@ -661,21 +747,30 @@ async function build() {
     state.rebuildQueued = true;
     return;
   }
+  if (usesTrack() && !state.track) {
+    state.sticker = null;
+    state.stale = false;
+    setStatus(el.stickerStatus, 'Escolha o áudio no passo 1 para criar a figurinha.');
+    renderSticker();
+    return;
+  }
+  const loadId = state.loadId;
   state.building = true;
   setStatus(el.sendStatus, '');
   renderSticker();
   try {
-    state.sticker = await api('/api/figurinha', {
+    const sticker = await api('/api/figurinha', {
       method: 'POST',
-      json: { start: state.start, duration: state.length, fit: fit(), audioStart: state.audioStart },
+      json: { mode: state.mode, start: state.start, duration: state.length, fit: fit(), audioStart: state.audioStart },
     });
+    // Another file was chosen meanwhile: this sticker is not for it.
+    if (loadId !== state.loadId) return;
+    state.sticker = sticker;
     state.stale = false;
     const version = Date.now();
     el.stickerImage.src = `/api/arquivo/figurinha.webp?v=${version}`;
     el.stickerAudio.src = state.sticker.audioSeconds ? `/api/arquivo/som.ogg?v=${version}` : '';
-    setStatus(el.stickerStatus, state.sticker.audioSeconds
-      ? 'Toque na figurinha para ouvir.'
-      : 'Esse vídeo não tem som. Use outro áudio no passo 1 ou baixe a figurinha muda.');
+    setStatus(el.stickerStatus, stickerNote(sticker));
   } catch (error) {
     if (error.status === 409) {
       // The server is still busy (sending, for example): try again shortly.
@@ -694,6 +789,12 @@ async function build() {
   }
 }
 
+function stickerNote(sticker) {
+  if (sticker.mode === 'foto') return 'Figurinha parada, sem som.';
+  if (sticker.audioSeconds) return 'Toque na figurinha para ouvir.';
+  return 'Esse vídeo não tem som: ela vai como figurinha animada muda. Para pôr som, use Vídeo + áudio.';
+}
+
 function renderSticker() {
   const { sticker, building } = state;
   el.square.classList.toggle('updating', building);
@@ -702,7 +803,7 @@ function renderSticker() {
   el.stickerImage.hidden = !sticker;
   el.play.hidden = !sticker?.audioSeconds || building;
   el.badge.hidden = !sticker;
-  if (sticker) el.badge.textContent = seconds(sticker.duration);
+  if (sticker) el.badge.textContent = sticker.mode === 'foto' ? 'Foto' : seconds(sticker.duration);
   el.downloads.hidden = !sticker;
   el.audioDownload.hidden = !sticker?.audioSeconds;
   renderSend();
@@ -720,7 +821,7 @@ el.play.addEventListener('click', () => {
 
 function renderSend() {
   const connected = state.whatsapp.state === 'open';
-  const ready = Boolean(state.sticker?.audioSeconds) && !state.building && !state.stale;
+  const ready = Boolean(state.sticker) && !state.building && !state.stale;
   if (!connected) {
     const labels = { off: 'Conectar o WhatsApp', qr: 'Mostrar o QR Code', connecting: 'Conectando…' };
     el.send.textContent = labels[state.whatsapp.state];
@@ -750,5 +851,6 @@ el.send.addEventListener('click', async () => {
   }
 });
 
+setMode('video');
 refreshStatus();
 setInterval(refreshStatus, STATUS_INTERVAL_MS);

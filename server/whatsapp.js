@@ -248,29 +248,33 @@ export function createWhatsApp({ dataDir }) {
     },
 
     // Sends to the user's own "message yourself" chat, and nowhere else.
-    async sendSoundSticker({ sticker, audio, seconds }) {
+    // With audio it is a sticker with sound; without, a plain sticker
+    // (animated or still).
+    async sendSticker({ sticker, animated, audio, seconds }) {
       if (!sock || status.state !== 'open') throw new WhatsAppError(409, 'Conecte o WhatsApp antes de enviar.');
       const current = sock;
       const send = async () => {
         const upload = { upload: current.waUploadToServer, logger, mediaUploadTimeoutMs: MEDIA_UPLOAD_TIMEOUT_MS };
         const { stickerMessage } = await prepareWAMessageMedia({ sticker }, upload);
-        const { audioMessage } = await prepareWAMessageMedia(
-          { audio, mimetype: OPUS_MIME, seconds, ptt: false },
-          upload,
-        );
-
         Object.assign(stickerMessage, {
           width: 512,
           height: 512,
           // Sound stickers are sent flagged as animated, including still images.
-          isAnimated: true,
-          stickerSentTs: Date.now(),
+          isAnimated: Boolean(audio || animated),
           isAvatar: false,
           isAiSticker: false,
           isLottie: false,
         });
-        Object.assign(audioMessage, { mimetype: OPUS_MIME, seconds, ptt: false });
-        registerSoundSticker(stickerMessage, audioMessage);
+
+        if (audio) {
+          const { audioMessage } = await prepareWAMessageMedia(
+            { audio, mimetype: OPUS_MIME, seconds, ptt: false },
+            upload,
+          );
+          stickerMessage.stickerSentTs = Date.now();
+          Object.assign(audioMessage, { mimetype: OPUS_MIME, seconds, ptt: false });
+          registerSoundSticker(stickerMessage, audioMessage);
+        }
 
         const myJid = jidNormalizedUser(current.user.id);
         const message = generateWAMessageFromContent(myJid, { stickerMessage }, { userJid: myJid });

@@ -38,6 +38,19 @@ export const AUDIO_INPUT_GUARD = [
   '-format_whitelist', 'mov,matroska,avi,mp3,ogg,wav,flac,aac',
 ];
 
+// Photos: single image formats only (JPEG, PNG, WebP, GIF, BMP). The server
+// always saves the photo as "foto.<extension>", a name with no % or wildcard,
+// so the image2 reader cannot expand it into other files.
+export const PHOTO_INPUT_GUARD = [
+  '-protocol_whitelist', 'file',
+  '-format_whitelist', 'image2,png_pipe,jpeg_pipe,webp_pipe,gif,bmp_pipe',
+];
+
+// WhatsApp accepts still stickers up to 100 KB; the margin leaves room for
+// the pack metadata.
+export const PHOTO_LIMIT_KB = 96;
+export const PHOTO_QUALITIES = [85, 70, 55, 40, 25, 10];
+
 // Where the separate sound starts, so that at least a moment of it is left.
 export function clampAudioStart(start, total) {
   const length = Number.isFinite(total) && total > 0 ? total : 0;
@@ -90,6 +103,18 @@ export function stickerArgs({ input, output, quality, fps }) {
     '-vf', `fps=${fps}`,
     '-c:v', 'libwebp_anim', '-q:v', String(quality), '-compression_level', '4',
     '-loop', '0',
+    output,
+  ];
+}
+
+// Still sticker from a photo: one 512 square WebP frame. Run the qualities in
+// order until one fits the limit.
+export function photoArgs({ input, output, fit, quality }) {
+  return [
+    ...PHOTO_INPUT_GUARD,
+    '-i', input,
+    '-frames:v', '1', '-vf', frameFilter(fit),
+    '-c:v', 'libwebp', '-quality', String(quality), '-compression_level', '6',
     output,
   ];
 }

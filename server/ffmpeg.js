@@ -7,7 +7,7 @@ const EXE = process.platform === 'win32' ? '.exe' : '';
 const DEFAULT_TIMEOUT_MS = 120_000;
 const STDERR_KEEP_BYTES = 8 * 1024;
 // Encoders the recipe needs; some minimal FFmpeg builds lack them.
-const REQUIRED_ENCODERS = ['libwebp_anim', 'libopus', 'png', 'pcm_s16le'];
+const REQUIRED_ENCODERS = ['libwebp_anim', 'libwebp', 'libopus', 'png', 'pcm_s16le'];
 
 function findOnPath(name) {
   const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);

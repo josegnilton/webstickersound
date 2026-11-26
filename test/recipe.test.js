@@ -7,8 +7,11 @@ import path from 'node:path';
 import test from 'node:test';
 import { ffmpeg, hasFfmpeg, probe } from '../server/ffmpeg.js';
 import { isAnimatedWebp } from '../server/webp.js';
+import { buildPhotoSticker } from '../server/media.js';
 import {
   AUDIO_INPUT_GUARD,
+  PHOTO_INPUT_GUARD,
+  PHOTO_LIMIT_KB,
   audioArgs,
   clampAudioStart,
   clampTrim,
@@ -37,6 +40,7 @@ test.before(async () => {
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', at('silent.mp4'),
   ]);
   await ffmpeg(['-f', 'lavfi', '-i', 'sine=frequency=880:duration=8', '-c:a', 'flac', at('song.flac')]);
+  await ffmpeg(['-f', 'lavfi', '-i', 'testsrc2=size=1600x900', '-frames:v', '1', at('photo.png')]);
 });
 
 test.after(async () => {
@@ -102,4 +106,16 @@ test('a separate sound replaces the sound of the video', options, async () => {
   await runRecipe(audioArgs({ input: at('mixed.mov'), output: at('mixed.ogg') }));
   const sound = await probe(at('mixed.ogg'));
   assert.ok(Math.abs(sound.duration - 2) < 0.2, `${sound.duration} s`);
+});
+
+test('a photo becomes a still 512 sticker under 100 KB', options, async () => {
+  const photo = await probe(at('photo.png'), { inputGuard: PHOTO_INPUT_GUARD });
+  assert.equal(photo.width, 1600);
+  const photoDir = await fs.mkdtemp(path.join(dir, 'photo-'));
+  const { kb } = await buildPhotoSticker({ input: at('photo.png'), workDir: photoDir, fit: 'contain' });
+  assert.ok(kb <= PHOTO_LIMIT_KB, `${kb} KB`);
+  const webp = await fs.readFile(path.join(photoDir, 'figurinha.webp'));
+  assert.equal(isAnimatedWebp(webp), false);
+  const sticker = await probe(path.join(photoDir, 'figurinha.webp'));
+  assert.deepEqual([sticker.width, sticker.height], [512, 512]);
 });

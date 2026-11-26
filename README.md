@@ -1,6 +1,6 @@
 # Figuráudio
 
-Transforma um trecho de vídeo em **figurinha com som** e envia para o **seu próprio WhatsApp**.
+Transforma um trecho de vídeo em **figurinha com som** (ou uma foto em figurinha comum) e envia para o **seu próprio WhatsApp**.
 
 Roda no seu computador. Cada pessoa usa a própria conta: você conecta o seu WhatsApp lendo um QR Code, igual ao WhatsApp Web, e a figurinha chega na sua conversa com você mesmo. De lá você salva nos favoritos e manda para quem quiser.
 
@@ -106,11 +106,21 @@ Pronto: o topo da página mostra **WhatsApp conectado**. A conexão fica salva n
 
 ### 6. Faça a figurinha
 
-1. **Escolha o vídeo**: clique em **Escolher vídeo** ou arraste o arquivo para a página.
-2. **Escolha o trecho**: arraste a seleção na barra (até 10 segundos) ou digite o início e a duração. **Ouvir trecho** toca o pedaço escolhido.
-3. **Enquadramento**: **Preencher** corta o vídeo num quadrado; **Mostrar tudo** mostra o vídeo inteiro com bordas transparentes.
-4. **Som (opcional)**: para usar um áudio separado no lugar do som do vídeo, clique em **Usar outro áudio** (MP3, M4A, AAC, OGG, Opus, WAV, FLAC, ou outro vídeo). Arraste a seleção na barra do áudio para escolher a parte que toca. Também dá para arrastar o vídeo e o áudio juntos para a página. **Voltar ao som do vídeo** desfaz.
-5. **Confira**: a figurinha aparece à direita. Toque nela para ouvir o som.
+No topo da página, escolha o tipo de figurinha:
+
+| Tipo | O que faz |
+| --- | --- |
+| **Vídeo** | Figurinha animada com o som do próprio vídeo. Se o vídeo não tiver som, ela vai como figurinha animada muda. |
+| **Vídeo + áudio** | Figurinha animada com o som de outro arquivo (MP3, M4A, AAC, OGG, Opus, WAV, FLAC ou outro vídeo) no lugar do som do vídeo. |
+| **Foto** | Figurinha comum, parada e sem som (JPG, PNG, WebP, GIF ou BMP). |
+
+Depois:
+
+1. **Escolha o arquivo**: clique em **Escolher vídeo** (ou **Escolher foto**) ou arraste o arquivo para a página. Arrastar já escolhe o tipo: uma foto vai para **Foto**, e um vídeo junto com um áudio vai para **Vídeo + áudio**.
+2. **Escolha o trecho** (vídeo): arraste a seleção na barra (até 10 segundos) ou digite o início e a duração. **Ouvir trecho** toca o pedaço escolhido.
+3. **Escolha o áudio** (Vídeo + áudio): clique em **Escolher áudio** e arraste a seleção na barra do áudio para escolher a parte que toca.
+4. **Enquadramento**: **Preencher** corta num quadrado; **Mostrar tudo** mostra a imagem inteira com bordas transparentes.
+5. **Confira**: a figurinha aparece à direita. Se tiver som, toque nela para ouvir.
 6. **Envie**: clique em **Enviar para o meu WhatsApp**.
 
 A figurinha chega na sua conversa com você mesmo (a conversa com o seu próprio número). Toque nela, salve nos favoritos e encaminhe para quem quiser.
@@ -128,8 +138,9 @@ Também dá para baixar a figurinha (`.webp`) e o som (`.ogg`) separados pelos l
 | **`npm ci` falha dizendo que precisa do Node.js 20** | Seu Node.js é antigo. Instale a versão LTS em [nodejs.org](https://nodejs.org). |
 | **O celular diz "sem conexão" ao ler o QR Code** | Confira a internet do computador e do celular, clique em **Gerar novo QR Code** e leia o código novo. |
 | **"A porta 4827 já está em uso"** | O Figuráudio já está aberto em outra janela. Use `http://127.0.0.1:4827` ou feche a outra janela. Para usar outra porta: `PORT=5000 npm start` (no PowerShell: `$env:PORT=5000; npm start`). |
-| **"Esse vídeo não tem som"** | O vídeo não tem faixa de áudio. Use **Usar outro áudio** para colocar um som, ou baixe a figurinha muda. |
+| **"Esse vídeo não tem som"** | O vídeo não tem faixa de áudio. Ele vai como figurinha muda; para colocar um som, use **Vídeo + áudio**. |
 | **"A figurinha passou de 500 KB"** | O WhatsApp limita figurinhas animadas a 500 KB. Escolha um trecho mais curto. |
+| **"A figurinha passou de 100 KB"** | O WhatsApp limita figurinhas paradas a 100 KB. Tente outra foto. |
 | **A figurinha chegou, mas quem recebeu não ouve o som** | A figurinha com som é um recurso novo do WhatsApp, liberado aos poucos. Quem recebe precisa ter o WhatsApp atualizado. |
 | **Quero trocar de conta ou desconectar** | Clique em **Desconectar o WhatsApp** na página. Você também pode remover o aparelho no celular, em **Aparelhos conectados**. |
 
@@ -140,7 +151,7 @@ Também dá para baixar a figurinha (`.webp`) e o som (`.ogg`) separados pelos l
 Tudo fica na pasta `data/`, dentro do projeto:
 
 - `data/session/`: a conexão com o seu WhatsApp. **Quem tiver essa pasta consegue usar a sua conta.** Não compartilhe e não envie para o GitHub (ela já está no `.gitignore`). O botão **Desconectar** apaga essa pasta.
-- `data/work/`: o último vídeo, o áudio separado (se tiver) e a última figurinha. É apagada sempre que o Figuráudio abre.
+- `data/work/`: o último vídeo ou foto, o áudio separado (se tiver) e a última figurinha. É apagada sempre que o Figuráudio abre.
 - `data/whatsapp.log`: registro de avisos e erros da conexão, útil se algo der errado. Os números e nomes dos contatos são retirados, mas mesmo assim **não publique esse arquivo**.
 
 ---
@@ -151,7 +162,9 @@ Tudo fica na pasta `data/`, dentro do projeto:
 2. O FFmpeg corta o trecho (e, se você escolheu um áudio separado, o pedaço do áudio no lugar do som do vídeo), enquadra em 512x512 e gera:
    - a figurinha animada em **WebP**, com até 500 KB;
    - o som em **Opus** (`.ogg`), o mesmo formato dos áudios do WhatsApp.
-3. Ao enviar, a Baileys conecta como um "aparelho conectado" e manda uma mensagem de figurinha com o áudio embutido para a sua própria conversa.
+
+   Uma foto vira uma figurinha **WebP** parada, com até 100 KB.
+3. Ao enviar, a Baileys conecta como um "aparelho conectado" e manda a figurinha (com o áudio embutido, se tiver som) para a sua própria conversa.
 
 O formato da figurinha com som não é documentado pelo WhatsApp e pode mudar a qualquer momento.
 
@@ -160,7 +173,7 @@ O formato da figurinha com som não é documentado pelo WhatsApp e pode mudar a 
 ```
 server/
   index.js          servidor local e rotas da página
-  media.js          monta a figurinha e o som a partir do vídeo
+  media.js          monta a figurinha (e o som) a partir do vídeo ou da foto
   recipe.js         comandos exatos do FFmpeg
   ffmpeg.js         encontra e executa o FFmpeg
   webp.js           escreve nome do pacote e autor no WebP
